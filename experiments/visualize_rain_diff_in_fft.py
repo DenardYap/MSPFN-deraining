@@ -53,9 +53,9 @@ for idx, type_ in enumerate(types):
         ax.imshow(orig_fft_images[jdx] - fft_img)
         ax.axis('off')  # Hide axes
 
-axes[0, 0].set_title("Normal Image FFT")
+axes[0, 0].set_title("Normal Image\n FFT", fontsize=22)
 for idx, type_ in enumerate(types):
-    axes[0, idx + 1].set_title(type_.capitalize() + " Difference")
+    axes[0, idx + 1].set_title(type_.capitalize() + "\n Difference", fontsize=22)
 
 plt.tight_layout()
 # plt.show()

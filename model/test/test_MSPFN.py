@@ -5,6 +5,9 @@ import os
 import glob
 import time
 import tensorflow as tf
+# import tensorflow.compat.v1 as tf
+import tf_slim as slim
+
 import matplotlib.pyplot as plt
 import sys
 sys.path.append('../')
@@ -22,8 +25,7 @@ save_path = '.\\test_data\\MSPFN\\'
 if not os.path.exists(save_path):
     os.mkdir(save_path)
 
-
-num =1
+num = 1
 for f in file:
     pic_path = os.path.join(img_path, f)
     file_name = f
