@@ -17,6 +17,7 @@ def butterworth_highpass_filter(shape, cutoff, order=2):
     x, y = np.meshgrid(np.arange(cols) - ccol, np.arange(rows) - crow)
     d = np.sqrt(x**2 + y**2)
     return 1 / (1 + (cutoff / d) ** (2 * order))
+
 def ideal_highpass_filter(shape, cutoff):
     rows, cols = shape
     crow, ccol = rows // 2, cols // 2

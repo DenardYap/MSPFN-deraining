@@ -52,9 +52,9 @@ for idx, type_ in enumerate(types):
         ax.imshow(fft_img)
         ax.axis('off')  # Hide axes
 
-axes[0, 0].set_title("Normal Image FFT")
+axes[0, 0].set_title("Normal Image\nFFT", fontsize=22)
 for idx, type_ in enumerate(types):
-    axes[0, idx + 1].set_title(type_.capitalize() + " Image FFT")
+    axes[0, idx + 1].set_title(type_.capitalize() + " Image\nFFT", fontsize=22)
 
 plt.tight_layout()
 # plt.show()
