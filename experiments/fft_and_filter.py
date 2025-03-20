@@ -7,7 +7,6 @@ from scipy.signal import wiener
 
 def get_filter(rows, cols, D0=30):
     crow, ccol = rows // 2, cols // 2  # Center of the frequency domain
-
     x, y = np.ogrid[:rows, :cols]
     mask = np.exp(-((x - crow)**2 + (y - ccol)**2) / (2 * D0**2))
 

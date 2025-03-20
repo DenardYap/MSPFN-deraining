@@ -1,4 +1,8 @@
 /myenv
 /env
 /images
+<<<<<<< Updated upstream
 test.py
+=======
+/.venv
+>>>>>>> Stashed changes
