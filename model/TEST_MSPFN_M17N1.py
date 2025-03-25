@@ -243,7 +243,7 @@ class Model:
         [[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],[[8.,0.,0.],[0.,8.,0.],[0.,0.,8.]],[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]]],
         [[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]]]
         ])
-        frame=tf.nn.conv2d(x,weight,[1,1,1,1],padding='SAME')
+        frame=tf.nn.conv2d(x,weight,strides=[1,1,1,1],padding='SAME')
         #frame = tf.cast(((frame - tf.reduce_min(frame)) / (tf.reduce_max(frame) - tf.reduce_min(frame))) * 255, tf.uint8)
         return frame
 		
@@ -256,7 +256,7 @@ class Model:
                                     [-2.0,-2.0,-2.0], [0,0,0],  [2.0,2.0,2.0],
                                     [-1.0,-1.0,-1.0], [0,0,0],  [1.0,1.0,1.0]],shape = [3, 3, 3, 1])) 
 								 
-        frame=tf.nn.conv2d(x, weight, [1,1,1,1], padding='SAME')
+        frame=tf.nn.conv2d(x, weight, strides=[1,1,1,1], padding='SAME')
         #frame = tf.cast(((frame - tf.reduce_min(frame)) / (tf.reduce_max(frame) - tf.reduce_min(frame)))*2.0-1, tf.float32)
         #output = tf.cast(((frame - tf.reduce_min(frame)) / (tf.reduce_max(frame) - tf.reduce_min(frame))) * 255, tf.float32)#tf.uint8
         return frame

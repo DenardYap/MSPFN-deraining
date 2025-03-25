@@ -43,4 +43,4 @@ def crop(image, scale, dtype=np.float32):
     return img_concat.astype(dtype)
 
 def img_crop(image, scale, dtype=tf.float32):
-	return tf.py_func(crop, [image, scale], dtype)
+	return tf.compat.v1.py_func(crop, [image, scale], dtype)

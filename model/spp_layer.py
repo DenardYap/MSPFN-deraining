@@ -63,4 +63,4 @@ def np_spatial_pyramid_pooling(input_feature_maps, spatial_pyramid, dtype=np.flo
 	return stack
 
 def tf_spatial_pyramid_pooling(tf_input_feature_maps, tf_spatial_pyramid, dtype=tf.float32):
-	return tf.py_func(np_spatial_pyramid_pooling, [tf_input_feature_maps, tf_spatial_pyramid], dtype)
+	return tf.compat.v1.py_func(np_spatial_pyramid_pooling, [tf_input_feature_maps, tf_spatial_pyramid], dtype)

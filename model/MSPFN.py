@@ -243,7 +243,7 @@ class MODEL:
         [[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],[[8.,0.,0.],[0.,8.,0.],[0.,0.,8.]],[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]]],
         [[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],[[-1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]]]
         ])
-        frame=tf.nn.conv2d(x,weight,[1,1,1,1],padding='SAME')
+        frame=tf.nn.conv2d(x, weight,strides=[1,1,1,1],padding='SAME')
         return frame
 		
     def sobel(self, x):
@@ -251,7 +251,7 @@ class MODEL:
                                     [-2.0,-2.0,-2.0], [0,0,0],  [2.0,2.0,2.0],
                                     [-1.0,-1.0,-1.0], [0,0,0],  [1.0,1.0,1.0]],shape = [3, 3, 3, 1])) 
 								 
-        frame=tf.nn.conv2d(x, weight, [1,1,1,1], padding='SAME')
+        frame=tf.nn.conv2d(x, weight, strides=[1,1,1,1], padding='SAME')
         return frame
         
     def inference_losses(self, x, imitation):

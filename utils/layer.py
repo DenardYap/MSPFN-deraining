@@ -3,7 +3,6 @@ from PIL import Image
 import cv2
 import numpy as np
 
-
 def NonLocalBlock(input_x, out_channels, sub_sample=True, is_bn=True, scope='NonLocalBlock'):
     batchsize, height, width, in_channels = input_x.get_shape().as_list()
     with tf.variable_scope(scope) as sc:
@@ -74,11 +73,11 @@ def conv_layer(x, filter_shape, stride, trainable=True):
         name='weight', 
         shape=filter_shape,
         dtype=tf.float32, 
-        initializer=tf.contrib.layers.xavier_initializer(),
+        initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
         trainable=trainable)
     return tf.nn.conv2d(
-        input=x,
-        filter=filter_,
+        x,
+        filter_,
         strides=[1, stride, stride, 1],
         padding='SAME')
 
@@ -88,26 +87,26 @@ def deconv_layer(x, filter_shape, output_shape, stride, trainable=True):
         name='weight',
         shape=filter_shape,
         dtype=tf.float32,
-        initializer=tf.contrib.layers.xavier_initializer(),
+        initializer=tf.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform"),
         trainable=trainable)
     return tf.nn.conv2d_transpose(
-        value=x,
-        filter=filter_,
+        x,
+        filter_,
         output_shape=output_shape,
         strides=[1, stride, stride, 1])
 
 
 def max_pooling_layer(x, size, stride):
-    return tf.nn.max_pool(
-        value=x,
+    return tf.nn.max_pool2d(
+        input=x,
         ksize=[1, size, size, 1],
         strides=[1, stride, stride, 1],
         padding='SAME')
 
 
 def avg_pooling_layer(x, size, stride):
-    return tf.nn.avg_pool(
-        value=x,
+    return tf.nn.avg_pool2d(
+        input=x,
         ksize=[1, size, size, 1],
         strides=[1, stride, stride, 1],
         padding='SAME')
@@ -325,17 +324,17 @@ def down_sample(X):
 
     #img1 = offset(X, (OFF), (0))
     #image1 = image1.resize((bs, a//scale, b//scale, c), interpolation=cv2.INTER_CUBIC)
-    image1 = tf.image.resize_images(image1, [a//scale, b//scale], method=1)
+    image1 = tf.image.resize(image1, [a//scale, b//scale], method=1)
     #img2 = offset(X, (-OFF), (0))
-    image2 = tf.image.resize_images(image2, [a//scale, b//scale], method=1)
+    image2 = tf.image.resize(image2, [a//scale, b//scale], method=1)
     #image2 = cv2.resize(image2, (bs, a//scale, b//scale, c), interpolation=cv2.INTER_CUBIC)
     #img3 = offset(X, (0), (OFF))
-    image3 = tf.image.resize_images(image3, [a//scale, b//scale], method=1)
+    image3 = tf.image.resize(image3, [a//scale, b//scale], method=1)
     #image3 = cv2.resize(image3, (bs, a//scale, b//scale, c), interpolation=cv2.INTER_CUBIC)
     #img4 = offset(X, (0), (-OFF))
-    image4 = tf.image.resize_images(image4, [a//scale, b//scale], method=1)
+    image4 = tf.image.resize(image4, [a//scale, b//scale], method=1)
     #image4 = cv2.resize(image4, (bs, a//scale, b//scale, c), interpolation=cv2.INTER_CUBIC)
-    image5 = tf.image.resize_images(X, [a//scale, b//scale], method=1)
+    image5 = tf.image.resize(X, [a//scale, b//scale], method=1)
     #image5 = cv2.resize(X, (bs, a//scale, b//scale, c), interpolation=cv2.INTER_CUBIC)
     image = tf.concat([image1,image2,image3,image4,image5],3)
     return image

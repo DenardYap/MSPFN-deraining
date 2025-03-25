@@ -2,3 +2,6 @@
 /env
 /images
 test.py
+*.pyc
+report.txt
+*.index

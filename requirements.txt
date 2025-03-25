@@ -4,5 +4,5 @@ matplotlib
 scikit-learn
 scikit-image
 pyFFTW
-tensorflow
+tensorflow==1.15
 tqdm

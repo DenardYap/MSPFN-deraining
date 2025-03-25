@@ -69,7 +69,6 @@ def calculate_ssim(image_path1, image_path2):
     img2 = np.array(Image.open(image_path2).convert('L'))
     return ssim(img1, img2)
 
-# Example usage
 if __name__ == "__main__":
 
     image_path1 = 'giraffe.png'

@@ -5,9 +5,7 @@ import os
 import glob
 import time
 import tensorflow as tf
-# import tensorflow.compat.v1 as tf
-import tf_slim as slim
-
+# import tensorflow as tf
 import matplotlib.pyplot as plt
 import sys
 sys.path.append('../')
@@ -17,10 +15,10 @@ from TEST_MSPFN_M17N1 import Model
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 is_training = tf.placeholder(tf.bool, [])
-
-img_path = '.\\test_data\\TEST100\\inputcrop\\'
+dataset_name = "R100H"
+img_path = f'test_data/{dataset_name}/inputcrop'
 file = os.listdir(img_path)
-save_path = '.\\test_data\\MSPFN\\'
+save_path = f'test_data/{dataset_name}_predict'
 
 if not os.path.exists(save_path):
     os.mkdir(save_path)
@@ -45,7 +43,7 @@ for f in file:
         sess = tf.Session()
         sess.run(init)
         saver = tf.train.Saver()
-        saver.restore(sess, '../MSPFN/epoch50')#93
+        saver.restore(sess, 'epoch44') #93
         vars_all=tf.trainable_variables()
         print ('Params:',np.sum([np.prod(v.get_shape().as_list()) for v in vars_all]))
         st_time=time.time()
@@ -74,7 +72,7 @@ for f in file:
             sess = tf.Session()
             sess.run(init)
             saver = tf.train.Saver()
-            saver.restore(sess, '../MSPFN/epoch50')#93
+            saver.restore(sess, 'epoch44') #93
             st_time=time.time()
             fake = sess.run(
                 [model.imitation],
