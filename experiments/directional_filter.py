@@ -1,9 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from scipy.signal import kaiserord, firwin
-from numpy.polynomial.chebyshev import Chebyshev
-
+from utils import kaiser_lowpass_1d, build_8_direction_filters
 '''
 Micah Williamson
 University of Michigan
@@ -21,7 +19,8 @@ class DirectionalFilter:
     def __init__(self, minCanny=150, maxCanny=220):
         self.minCanny = minCanny
         self.maxCanny = maxCanny
-        print("Direc filter")
+
+        self.kaiser_fir = kaiser_lowpass_1d()
         return
     
 
@@ -35,9 +34,9 @@ class DirectionalFilter:
         image (BGR image): Image loaded using CV2 (NOTE: Expects BGR format)
 
         Returns:
-        Y: luminance component
-        Cb: Blue difference component
-        Cr: Red difference component
+        Y (uint8 image): luminance component
+        Cb (uint8 image): Blue difference component
+        Cr (uint8 image): Red difference component
         '''
         Y = 16 + 0.257*image[:, :, 2]+0.564*image[:, :, 1]+0.098*image[:, :, 0]
         Cb = 128-0.148*image[:, :, 2]-0.291*image[:, :, 1]+0.439*image[:, :, 0]
@@ -50,7 +49,7 @@ class DirectionalFilter:
         Find edges from Y component of an image using Classic Canny Operator
 
         Parameters:
-        Y (float image): the luminance component of an image (from rgb_to_ycbcr)
+        Y (UINT8 image): the luminance component of an image (from rgb_to_ycbcr)
         low_thresh (int, optional): lower thresh for Canny algorithm
         high_thresh (int, optional): higher thresh for Canny algoorithm
 
@@ -73,7 +72,11 @@ class DirectionalFilter:
         of the rain streaks. Useful reference: 
         https://learnopencv.com/histogram-of-oriented-gradients/
 
+        Parameters:
+        edges (uint8 image): a single block from the edges from Y component
 
+        Returns:
+        top_3_bins (int list[3]): top 3 edge orientations
         '''    
         gx = cv2.Sobel(edges, cv2.CV_32F, 1, 0, ksize=3)
         gy = cv2.Sobel(edges, cv2.CV_32F, 0, 1, ksize=3)
@@ -92,6 +95,7 @@ class DirectionalFilter:
 
         for angle, mag in zip(angles_flat, magnitudes_flat):
             # Algorithm per ChatGPT
+            # TODO: I am not confident that this is right
             bin_idx = angle / bin_width
             lower_bin = int(np.floor(bin_idx)) % num_bins
             upper_bin = (lower_bin + 1) % num_bins
@@ -107,7 +111,6 @@ class DirectionalFilter:
 
         top_3_bins = np.argsort(histogram)[-3:]
         return top_3_bins
-            
 
 
     def apply_filter(self, img):
@@ -121,10 +124,6 @@ class DirectionalFilter:
         block_N = N // 4
         edge_blocks = [edges[x:x+block_M,y:y+block_N] for x in range(0,M,block_M) \
                        for y in range(0,N,block_N)]
-        # #Look at a couple of blocks:
-        # block_samples = np.hstack((edge_blocks[0],edge_blocks[5]))
-        # cv2.imwrite('block_samples.png', block_samples)
-        # 4. Process each block and compute HOE if it is not "clean"
         
         interval_nums = []
         for edge_blk in edge_blocks:
@@ -141,19 +140,25 @@ class DirectionalFilter:
         for interval in interval_nums:
             GHIST[interval] += 1
         top_interval = np.argsort(GHIST)[-1]
-        
+        print('Top interval: ', top_interval)
         # 6. Compute 2D FFT Of Y
-        I = np.fft.fft2(Y)
+        I = np.fft.fftshift(np.fft.fft2(Y.astype(np.float32)))
         F = np.abs(I)
         P = np.angle(I)
-
+        filters = build_8_direction_filters((M, N), self.kaiser_fir)
+        I = I*filters[0]
+        Y_filtered = np.fft.ifft2(np.fft.ifftshift(I))
+        Y_filtered = np.clip(np.real(Y_filtered), 0, 255).astype(np.uint8)
+        YCrCb_new = cv2.merge([Y_filtered, Cr, Cb])
+        return cv2.cvtColor(YCrCb_new, cv2.COLOR_YCR_CB2BGR)
 
 
 def main():
     df = DirectionalFilter()
-    # im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/rain_images/heavy/2.jpg_rain.png')
+    # im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/rain_images/light/0.jpg_rain.png')
     im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/giraffe_rain.png')
-    df.apply_filter(im)
+    im_filtered = df.apply_filter(im)
+    cv2.imwrite('filtered_final.png', np.hstack((im, im_filtered)))
     return
 
 
