@@ -31,6 +31,16 @@ def generate_fft(img_path):
     magnitude_spectrum = cv2.merge([mag_b_spectrum, mag_g_spectrum, mag_r_spectrum])
     return magnitude_spectrum
 
+def generate_fft_diff(orig_img_path, rain_img_path):
+        
+    orig_fft = generate_fft(orig_img_path)
+    rain_fft = generate_fft(rain_img_path)
+    print("orig_fft", orig_fft.shape)
+    print("rain_fft", rain_fft.shape)
+    return orig_fft - rain_fft
+image = generate_fft_diff("rain_images/heavy/0.jpg_derain.png", "rain_images/heavy/0.jpg_rain.png")
+plt.imsave("testtesttest.png", image, cmap="gray")
+
 # Original FFT, light FFT, medium FFT, heavy FFT
 fig, axes = plt.subplots(6, 4, figsize=(9, 18))
 
@@ -59,4 +69,5 @@ for idx, type_ in enumerate(types):
 
 plt.tight_layout()
 # plt.show()
-plt.savefig("fft_viz_diff.png")
+plt.savefig("fft_viz_diff2.png")
+

@@ -31,7 +31,7 @@ for f in file:
     W, H = img.shape[:2]
     print(img.shape)
     img = img / 127.5 - 1
-    input_ = np.zeros((1, W, H, 3))#16
+    input_ = np.zeros((1, W, H, 3)) # 16
     print(input_.shape)
     input_[0] = img
     if num==1:
