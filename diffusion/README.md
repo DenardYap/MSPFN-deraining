@@ -1,7 +1,7 @@
 # Greatlakes
 
 ## Enter interactive mode for GPU training
-salloc --job-name=interactive --cpus-per-task=4 --nodes=1 --mem=80G --time=01:00:00 --account=eecs556w25_class --partition=spgpu --gres=gpu:1
+salloc --job-name=interactive --cpus-per-task=4 --nodes=1 --mem=20G --time=08:00:00 --account=eecs556w25_class --partition=spgpu --gres=gpu:1
 
 ## Alternatively, use sbatch for better synchronization
 In the main directory, run `sbatch train.sh`
@@ -27,11 +27,70 @@ as the condition for the diffusion model.
 During sampling, we feed the FFT of the rain image into the model to sample a diff_fft, then
 we can use add the diff_fft to the FFT of the rain image to reconstruct the image. 
 
+
 ## Before training 
 Preprocess the images into a .csv file with these columns
 image_filepath, image_rain_filepath
 
 Then, this .csv file will later be used by the DataLoader to load in FFT 'images'. 
+
+# Stats 
+
+================== STATS FOR RAIN IMAGES ==================
+{'mag_R_max': 135855217.0, 
+ 'mag_G_max': 156903143.0, 
+ 'mag_B_max': 148352405.0, 
+ 'phase_R_max': 3.141592653589793, 
+ 'phase_G_max': 3.141592653589793, 
+ 'phase_B_max': 3.141592653589793, 
+ 'mag_R_min': 0.26717484204398306, 
+ 'mag_G_min': 0.3930467039383175, 
+ 'mag_B_min': 0.1844549793101568, 
+ 'phase_R_min': -3.141592653589793, 
+ 'phase_G_min': -3.141592653589793, 
+ 'phase_B_min': -3.141592653589793, 
+ 'mag_R_mean': 8814.03041683331, 
+ 'mag_G_mean': 8864.51467626992, 
+ 'mag_B_mean': 8940.354325505254, 
+ 'phase_R_mean': 2.471104472274917e-06, 
+ 'phase_G_mean': 4.4572740376683465e-06, 
+ 'phase_B_mean': 2.692936397761373e-06, 
+ 'mag_R_std': 66290.74666972898, 
+ 'mag_G_std': 74220.80913376767, 
+ 'mag_B_std': 74752.1538781648, 
+ 'phase_R_std': 1.8129752834502697, 
+ 'phase_G_std': 1.8131023785194367, 
+ 'phase_B_std': 1.8126965600959166, 
+ 'number_of_images': 2800, 
+ 'number_of_pixels': 608967730}
+
+================== STATS FOR DIFF IMAGES ==================
+{'mag_R_max': 4149842.8029009253, 
+ 'mag_G_max': 3182684.735184118, 
+ 'mag_B_max': 3333820.9423187114, 
+ 'phase_R_max': 6.283185307179586, 
+ 'phase_G_max': 6.283185307179586, 
+ 'phase_B_max': 6.283185307179586, 
+ 'mag_R_min': -27906869.0, 
+ 'mag_G_min': -23951451.0, 
+ 'mag_B_min': -24936859.0, 
+ 'phase_R_min': -6.283185307179586, 
+ 'phase_G_min': -6.283185307179586, 
+ 'phase_B_min': -6.283185307179586, 
+ 'mag_R_mean': 34.63145890222781, 
+ 'mag_G_mean': 135.34962504670045, 
+ 'mag_B_mean': 144.18493092819386, 
+ 'phase_R_mean': 7.067668323583826e-07, 
+ 'phase_G_mean': 7.428790062749291e-07, 
+ 'phase_B_mean': -4.5398161494717937e-07, 
+ 'mag_R_std': 10419.150481819577, 
+ 'mag_G_std': 9409.519604082185, 
+ 'mag_B_std': 9443.189321412372, 
+ 'phase_R_std': 1.606171782862127, 
+ 'phase_G_std': 1.6038872204529218, 
+ 'phase_B_std': 1.6265938990072801, 
+ 'number_of_images': 2800, 
+ 'number_of_pixels': 608967730}
 
 # TODOs:
 Preprocessing 
@@ -46,6 +105,10 @@ Postprocessing
 - After generating the fft we need to denormalize it 
 - After denormalizinng the fft we need to apply on the derained image's fft and get the reconstructed image  
 
+## Worthy experiments:
+1. Instead of generating Nx6 channels, just generate the FFT (both real and imaginary part separately)
+2. Instead of generating the difference in FFT, just try to generate the original FFT conditioned on the 
+   rain FFT
 
 ## Ignore this for now 
 
