@@ -14,7 +14,7 @@ def kaiser_lowpass_1d(pass_freq=0.45*np.pi,
     transition_width = stop_edge - pass_edge
     
     N, beta = kaiserord(atten_db, transition_width)
-    taps = firwin(100, pass_edge, window=('kaiser', beta), pass_zero=True)
+    taps = firwin(N, pass_edge, window=('kaiser', beta), pass_zero=True)
     return taps
 
 def chebyshev_T(n, x):

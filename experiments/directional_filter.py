@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from utils import *
+import os
 '''
 Micah Williamson
 University of Michigan
@@ -16,12 +17,17 @@ Springer, Cham. https://doi.org/10.1007/978-3-319-09333-8_45
 
 class DirectionalFilter:
     '''Directional Filter For Deraining'''
-    def __init__(self, minCanny=150, maxCanny=220):
+    def __init__(self, M=None, N=None, minCanny=150, maxCanny=220):
         self.minCanny = minCanny
         self.maxCanny = maxCanny
-
         self.kaiser_fir = kaiser_lowpass_1d()
-        self.filters = None
+
+        if M is None or N is None:
+            self.filters = None
+        else:
+            self.filters = build_8_direction_filters((M, N), self.kaiser_fir)
+            print(f'Initialized directional filter for {M}x{N} images')
+
         return
     
 
@@ -116,7 +122,7 @@ class DirectionalFilter:
         return top_3_bins
 
 
-    def apply_filter(self, img, idx):
+    def apply_filter(self, img):
         M, N = img.shape[0:2]
         # 1. Convert to YCbCr space
         Y, Cb, Cr = self.bgr_to_ycbcr(img)
@@ -150,8 +156,9 @@ class DirectionalFilter:
         P = np.angle(I)
         if self.filters == None:
             self.filters = build_8_direction_filters((M, N), self.kaiser_fir)
-        I = I*self.filters[idx]
-        Y_filtered = np.fft.ifft2(np.fft.ifftshift(I))
+        F_p = F*self.filters[top_interval]
+        I_p = F_p * np.exp(1j * P)
+        Y_filtered = np.fft.ifft2(np.fft.ifftshift(I_p))
         Y_filtered = np.clip(np.real(Y_filtered), 0, 255).astype(np.uint8)
         YCrCb_new = cv2.merge([Y_filtered, Cr, Cb])
         return cv2.cvtColor(YCrCb_new, cv2.COLOR_YCR_CB2BGR)
@@ -159,25 +166,23 @@ class DirectionalFilter:
 
 
 def main():
-    df = DirectionalFilter()
-    # im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/rain_images/light/0.jpg_rain.png')
-    im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/giraffe_rain.png')
-    # im_filtered = df.apply_filter(im)
-    # cv2.imwrite('filtered_final.png', np.hstack((im, im_filtered)))
-    M, N, C = im.shape
-    im_filtered = im
-    for idx in range(8):
-        out = df.apply_filter(im, idx)
-        im_filtered = np.hstack((im_filtered, out))
-    cv2.imwrite('filtered_final.png', im_filtered)
+    # Looks like R100H only has 320x480 and 480x320 images, so we can build the
+    # filter dimensions in up front to avoid redoing it for each image
+    df_320_480 = DirectionalFilter(M=320, N=480)
+    df_480_320 = DirectionalFilter(M=480, N=320)
+    base_path = '/Users/micahwilliamson/code/ECE556/MSPFN-deraining/model/test/' \
+    'test_data/R100H/inputcrop/'
+    write_path = '/Users/micahwilliamson/code/ECE556/MSPFN-deraining/' \
+    'experiments/direction_filtered_images/'
+    for filename in os.listdir(base_path):
+        im = cv2.imread((base_path + filename))
+        if im.shape[0] == 320:
+            im_filtered = df_320_480.apply_filter(im)
+        else:
+            im_filtered = df_480_320.apply_filter(im)
+        cv2.imwrite((write_path + filename), im_filtered)
+        print(f'Processed {filename}')
 
-    # kaiser_fir = kaiser_lowpass_1d()
-    # filters = build_8_direction_filters((M, N), kaiser_fir)
-    # im_out = img_float64_2_uint8(filters[0])
-    # for i in range(7):
-    #     im_out = np.hstack((im_out, img_float64_2_uint8(filters[i+1])))
-    # # im_out = np.hstack((img_float64_2_uint8(im1), img_float64_2_uint8(im2), img_float64_2_uint8(im1*im2)))
-    # cv2.imwrite('filters_viz.png', im_out)
     return
 
 
