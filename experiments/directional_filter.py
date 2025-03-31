@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from utils import kaiser_lowpass_1d, build_8_direction_filters
+from utils import *
 '''
 Micah Williamson
 University of Michigan
@@ -21,6 +21,7 @@ class DirectionalFilter:
         self.maxCanny = maxCanny
 
         self.kaiser_fir = kaiser_lowpass_1d()
+        self.filters = None
         return
     
 
@@ -85,7 +86,8 @@ class DirectionalFilter:
         mags = np.sqrt(gx ** 2 + gy ** 2)
         angles = ((np.arctan2(gy, gx)+90) * (180 / np.pi)) % 180
         # edge_orientations = angles[edges > 0]
-        # histogram, bins = np.histogram(edge_orientations.flatten(), bins=8, range=(0, 180))
+        # histogram, bins = np.histogram(edge_orientations.flatten(), bins=8, \
+        #                                range=(0, 180))
 
         num_bins = 8
         bin_width = 180 / num_bins
@@ -105,15 +107,16 @@ class DirectionalFilter:
             histogram[lower_bin] += mag * (1 - fractional_part)
             histogram[upper_bin] += mag * fractional_part 
 
-        # # Uncomment to print histogram
+        # Uncomment to print histogram
         # for i, val in enumerate(histogram):
-        #     print(f'Bin {i}: [{i*bin_width:.1f}-{(i+1)*bin_width:.1f}) degrees -> {val:.2f}')
+        #     print(f'Bin {i}: [{i*bin_width:.1f}-{(i+1)*bin_width:.1f}) \
+        #           degrees -> {val:.2f}')
 
         top_3_bins = np.argsort(histogram)[-3:]
         return top_3_bins
 
 
-    def apply_filter(self, img):
+    def apply_filter(self, img, idx):
         M, N = img.shape[0:2]
         # 1. Convert to YCbCr space
         Y, Cb, Cr = self.bgr_to_ycbcr(img)
@@ -140,25 +143,41 @@ class DirectionalFilter:
         for interval in interval_nums:
             GHIST[interval] += 1
         top_interval = np.argsort(GHIST)[-1]
-        print('Top interval: ', top_interval)
+        # print('Top interval: ', top_interval)
         # 6. Compute 2D FFT Of Y
         I = np.fft.fftshift(np.fft.fft2(Y.astype(np.float32)))
         F = np.abs(I)
         P = np.angle(I)
-        filters = build_8_direction_filters((M, N), self.kaiser_fir)
-        I = I*filters[0]
+        if self.filters == None:
+            self.filters = build_8_direction_filters((M, N), self.kaiser_fir)
+        I = I*self.filters[idx]
         Y_filtered = np.fft.ifft2(np.fft.ifftshift(I))
         Y_filtered = np.clip(np.real(Y_filtered), 0, 255).astype(np.uint8)
         YCrCb_new = cv2.merge([Y_filtered, Cr, Cb])
         return cv2.cvtColor(YCrCb_new, cv2.COLOR_YCR_CB2BGR)
 
 
+
 def main():
     df = DirectionalFilter()
     # im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/rain_images/light/0.jpg_rain.png')
     im = cv2.imread('/Users/micahwilliamson/code/ECE556/MSPFN-deraining/experiments/giraffe_rain.png')
-    im_filtered = df.apply_filter(im)
-    cv2.imwrite('filtered_final.png', np.hstack((im, im_filtered)))
+    # im_filtered = df.apply_filter(im)
+    # cv2.imwrite('filtered_final.png', np.hstack((im, im_filtered)))
+    M, N, C = im.shape
+    im_filtered = im
+    for idx in range(8):
+        out = df.apply_filter(im, idx)
+        im_filtered = np.hstack((im_filtered, out))
+    cv2.imwrite('filtered_final.png', im_filtered)
+
+    # kaiser_fir = kaiser_lowpass_1d()
+    # filters = build_8_direction_filters((M, N), kaiser_fir)
+    # im_out = img_float64_2_uint8(filters[0])
+    # for i in range(7):
+    #     im_out = np.hstack((im_out, img_float64_2_uint8(filters[i+1])))
+    # # im_out = np.hstack((img_float64_2_uint8(im1), img_float64_2_uint8(im2), img_float64_2_uint8(im1*im2)))
+    # cv2.imwrite('filters_viz.png', im_out)
     return
 
 
