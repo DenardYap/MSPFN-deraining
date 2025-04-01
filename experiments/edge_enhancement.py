@@ -68,41 +68,21 @@ def selective_brighten(image, threshold=170, brighten_factor=1.5):
     return image_float.astype(np.uint8)
 
 def smart_sharpen(image, contrast_thresh=10, brightness_thresh=230, amount=1.0):
-    # Convert to grayscale for edge detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-    # Detect edges (you could also try cv2.Laplacian or cv2.Sobel here)
     laplacian = cv2.Laplacian(gray, cv2.CV_64F)
     contrast_mask = np.abs(laplacian) > contrast_thresh
-    
-    # Optionally avoid sharpening very bright areas (e.g. rain streaks)
     brightness_mask = gray < brightness_thresh
-
-    # Combine masks
     final_mask = np.logical_and(contrast_mask, brightness_mask)
-
-    # Expand mask to 3 channels
     mask_3d = np.stack([final_mask]*3, axis=-1)
-
-    # Unsharp mask-style sharpening
     blurred = cv2.GaussianBlur(image, (3, 3), 0)
     sharpened = cv2.addWeighted(image, 1 + amount, blurred, -amount, 0)
-
-    # Apply sharpening only where mask is True
     result = np.where(mask_3d, sharpened, image)
-
     return result.astype(np.uint8)
 
 def enhance_details_bilateral(image, sigma_color=30, sigma_space=30, detail_boost=1.5):
-    # Smooth base layer
     base = cv2.bilateralFilter(image, d=9, sigmaColor=sigma_color, sigmaSpace=sigma_space)
-    
-    # Detail layer = original - base
     detail = cv2.subtract(image, base)
-
-    # Boost detail and add back
     boosted = cv2.addWeighted(base, 1.0, detail, detail_boost, 0)
-
     return boosted
 
 def horizontal_blur(image, kernel_width=15):
@@ -132,7 +112,6 @@ plt.axis('off')
 
 plt.tight_layout()
 plt.show()
-
 
 
 
