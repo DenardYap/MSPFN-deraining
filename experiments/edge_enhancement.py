@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+from tqdm import tqdm
 
 def directional_filter_color(image, angle_range=(85, 95)):
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
@@ -91,6 +93,8 @@ def horizontal_blur(image, kernel_width=15):
 
 image_path = "../model/test/test_data/R100H/inputcrop/1.png"
 original = cv2.imread(image_path)
+input_dir = '../model/test/test_data/R100H/inputcrop'
+output_dir = '../outputs/edge_directional_bilateral'
 
 filtered_freq = directional_filter_color(original)
 combined_result = refine_with_edge_enhancement(filtered_freq)
@@ -98,6 +102,27 @@ brightened_result = selective_brighten(combined_result, threshold=100, brighten_
 enhance_details_result = enhance_details_bilateral(brightened_result, sigma_color=30, sigma_space=30, detail_boost=1.5)
 horiz_blurred = horizontal_blur(brightened_result, kernel_width=5)
 brightened_result = selective_brighten(combined_result, threshold=80, brighten_factor=8)
+
+for filename in tqdm(os.listdir(input_dir)):
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+        input_path = os.path.join(input_dir, filename)
+        output_path = os.path.join(output_dir, filename)
+
+        original = cv2.imread(input_path)
+        if original is None:
+            print(f"Skipping {filename} (failed to load).")
+            continue
+
+        # Apply your pipeline
+        filtered_freq = directional_filter_color(original)
+        combined_result = refine_with_edge_enhancement(filtered_freq)
+        brightened = selective_brighten(combined_result, threshold=100, brighten_factor=1.4)
+        enhanced = enhance_details_bilateral(brightened, sigma_color=30, sigma_space=30, detail_boost=1.5)
+        horiz_blurred = horizontal_blur(enhanced, kernel_width=5)
+        final = selective_brighten(horiz_blurred, threshold=80, brighten_factor=8)
+
+        # Save the result
+        cv2.imwrite(output_path, final)
 
 plt.figure(figsize=(16, 8))
 plt.subplot(1, 2, 1)
@@ -112,7 +137,6 @@ plt.axis('off')
 
 plt.tight_layout()
 plt.show()
-
 
 
 

@@ -31,7 +31,7 @@ image = cv2.imread("giraffe_rain.png", cv2.IMREAD_GRAYSCALE)
 
 filtered_image = wiener(image, (10, 10)) 
 filtered_image = np.clip(filtered_image, 0, 255).astype(np.uint8)
-
+"""
 # Display results
 plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
@@ -44,9 +44,8 @@ plt.title("Filtered Image")
 plt.imshow(filtered_image, cmap="gray")
 plt.axis("off")
 
-
 plt.savefig("filtered.png")
-
+"""
 
 def generate_fft(image_path, output_image="fft_image.png", output_npz="fft_data.npz"):
     img = cv2.imread(image_path)
@@ -83,13 +82,17 @@ def reconstruct_from_fft_filtered(input_npz="fft_data.npz", output_image="recons
     mag_g, phase_g = data["mag_g"], data["phase_g"]
     mag_b, phase_b = data["mag_b"], data["phase_b"]
 
-    filter =  1 - butterworth_highpass_filter(mag_r.shape, cutoff, order)
-    # filter = 1 - ideal_highpass_filter(mag_r.shape, cutoff)
+    # Apply Gaussian low-pass filter
+    filter = gennas_test(mag_r.shape, fraction=0.25, inner_value=1.0, outer_value=0.7) * \
+                  gaussian_lowpass_filter(mag_r.shape, D0=60, min_value=0.3)
 
-    # Apply filter to magnitude
+
     mag_r_filtered = mag_r * filter
     mag_g_filtered = mag_g * filter
     mag_b_filtered = mag_b * filter
+
+    # Save FFT visualization *after* applying the filter
+    save_fft_visualization(mag_r_filtered, mag_g_filtered, mag_b_filtered, output_image="rain_fft_filtered.jpg")
 
     # Reconstruct the complex FFT for each channel
     fft_r = mag_r_filtered * np.exp(1j * phase_r)
@@ -118,6 +121,8 @@ def reconstruct_from_fft_filtered(input_npz="fft_data.npz", output_image="recons
     cv2.imwrite(output_image, reconstructed_image)
 
     print(f"Reconstructed color image with low-pass filter saved as: {output_image}")
+
+
 
 def reconstruct_from_fft(input_npz="fft_data.npz", output_image="reconstructed_image.png"):
     # Load FFT data for each channel
@@ -154,23 +159,124 @@ def reconstruct_from_fft(input_npz="fft_data.npz", output_image="reconstructed_i
 
     print(f"Reconstructed color image saved as: {output_image}")
 
-# generate_fft("giraffe.png", "giraffe_fft.jpg", "giraffe_fft.npz")
-# generate_fft("giraffe_rain.png", "giraffe_rain_fft.jpg", "giraffe_rain_fft.npz")
-# reconstruct_from_fft("giraffe_rain_fft.npz", "reconstructed_filtered_image.jpeg")
-# reconstruct_from_fft_filtered("giraffe_rain_fft.npz", "reconstructed_filtered_image.jpeg")
 
-import cv2
-import numpy as np
 
-# Load an image
-image = cv2.imread('giraffe_rain.png')
 
-# Apply Median Filter (kernel size 3, 5, 7, etc. depending on the amount of noise)
-filtered_image = cv2.medianBlur(image, 5)
-# filtered_image = cv2.bilateralFilter(image, 9, 75, 75)
-# filtered_image = cv2.fastNlMeansDenoisingColored(image, None, 10, 10, 7, 21)
+#######EVERYTHING UNDER THIS WAS ADDED BY GENNA AND COULD BE WRONG 
 
-# Display the filtered image
-cv2.imshow('Median Filter', filtered_image)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+def gaussian_lowpass_filter(shape, D0, min_value=0.3):
+    rows, cols = shape
+    crow, ccol = rows // 2, cols // 2
+    x, y = np.ogrid[:rows, :cols]
+    distance_squared = (x - crow)**2 + (y - ccol)**2
+    base_filter = np.exp(-distance_squared / (2 * (D0**2)))
+    
+    # Scale so it ranges from [min_value, 1] instead of [0, 1]
+    return base_filter * (1 - min_value) + min_value
+
+
+def save_fft_visualization(mag_r, mag_g, mag_b, output_image="fft_filtered.jpg"):
+    mag_r_spectrum = np.log1p(mag_r)
+    mag_g_spectrum = np.log1p(mag_g)
+    mag_b_spectrum = np.log1p(mag_b)
+    mag_r_spectrum = (mag_r_spectrum / np.max(mag_r_spectrum) * 255).astype(np.uint8)
+    mag_g_spectrum = (mag_g_spectrum / np.max(mag_g_spectrum) * 255).astype(np.uint8)
+    mag_b_spectrum = (mag_b_spectrum / np.max(mag_b_spectrum) * 255).astype(np.uint8)
+    spectrum_image = cv2.merge([mag_b_spectrum, mag_g_spectrum, mag_r_spectrum])
+    cv2.imwrite(output_image, spectrum_image)
+
+def gennas_test(image_shape, fraction=0.25, inner_value=1.0, outer_value=0.3):
+    """
+    Creates a filter where the center box has `inner_value` and the rest has `outer_value`.
+
+    Parameters:
+        image_shape: tuple like (rows, cols) or (rows, cols, channels)
+        fraction: how large the center box should be (relative to image size)
+        inner_value: value inside the box (usually 1)
+        outer_value: value outside the box (e.g., 0.7)
+
+    Returns:
+        filter: 2D array of same shape as image, with two distinct values
+    """
+    rows, cols = image_shape[:2]
+    box_h = int(rows * fraction)
+    box_w = int(cols * fraction)
+    
+    start_row = (rows - box_h) // 2
+    start_col = (cols - box_w) // 2
+
+    # Start everything at outer_value
+    filter = np.full((rows, cols), outer_value, dtype=float)
+
+    # Set center box to inner_value
+    filter[start_row:start_row + box_h, start_col:start_col + box_w] = inner_value
+
+    return filter
+
+def vertical_average_filter(image, kernel_size=5):
+    """
+    Applies a vertical average (box) filter to the image.
+    Only vertical blurring is applied — horizontal direction is untouched.
+
+    Parameters:
+        image: 2D (grayscale) or 3D (color) NumPy array
+        kernel_size: number of vertical pixels to average (should be odd)
+
+    Returns:
+        filtered_image: vertically averaged image
+    """
+    if kernel_size % 2 == 0:
+        raise ValueError("kernel_size must be odd")
+
+    # Create a vertical kernel (e.g., [1, 1, 1, ..., 1]T)
+    kernel = np.ones((kernel_size, 1), dtype=np.float32) / kernel_size
+
+    # Apply filter using OpenCV
+    return cv2.filter2D(image, -1, kernel)
+
+
+image = cv2.imread("rain.png")
+mask_filter = gennas_test(image.shape, fraction=0.25, inner_value=1.0, outer_value=0.7)
+
+
+
+# Generate FFT data and images
+generate_fft("clean.png", "clean_fft.jpg", "clean_fft.npz")
+generate_fft("rain.png", "rain_fft.jpg", "rain_fft.npz")
+
+# Reconstruct rain image using Gaussian low-pass filter
+reconstruct_from_fft_filtered("rain_fft.npz", "rain_filtered.png")
+
+# Load and convert images to RGB
+def load_rgb(path):
+    return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
+
+clean = load_rgb("clean.png")
+clean_fft = load_rgb("clean_fft.jpg")
+rain = load_rgb("rain.png")
+rain_fft = load_rgb("rain_fft.jpg")
+rain_filtered = load_rgb("rain_filtered.png")
+rain_fft_filtered = load_rgb("rain_fft_filtered.jpg")
+
+# Plot side-by-side
+plt.figure(figsize=(10, 8))
+
+titles = [
+    "Clean Image", "Clean FFT",
+    "Rain Image", "Rain FFT",
+    "Rain Filtered (Time Domain)", "Rain FFT (after Gaussian Filter)"
+]
+images = [
+    clean, clean_fft,
+    rain, rain_fft,
+    rain_filtered, rain_fft_filtered
+]
+
+for i in range(6):
+    plt.subplot(3, 2, i + 1)
+    plt.title(titles[i])
+    plt.imshow(images[i])
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
