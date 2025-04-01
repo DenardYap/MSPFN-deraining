@@ -5,3 +5,8 @@ test.py
 *.pyc
 report.txt
 *.index
+myenv/
+env/
+*.npz
+*.pth
+.DS_Store

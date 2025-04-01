@@ -71,8 +71,8 @@ def calculate_ssim(image_path1, image_path2):
 
 if __name__ == "__main__":
 
-    image_path1 = 'giraffe.png'
-    image_path2 = 'giraffe_rain.png'
+    image_path1 = 'tree.jpg'
+    image_path2 = 'recon_from_random_website.jpg'
 
     fsim_value = calculate_fsim(image_path1, image_path2)
     psnr_value = calculate_psnr(image_path1, image_path2)
@@ -81,3 +81,20 @@ if __name__ == "__main__":
     print(f"FSIM: {fsim_value}")
     print(f"PSNR: {psnr_value}")
     print(f"SSIM: {ssim_value}")
+
+    """
+    Reconstruct from mag only
+    FSIM: 0.7688759578918529
+    PSNR: 18.532778539088074
+    SSIM: 0.8436678888042367
+
+    Reconstruct from mag and phase
+    FSIM: 0.793317929508324
+    PSNR: 19.684711385409287
+    SSIM: 0.8824418944500877
+
+    Reconstruct from random website
+    FSIM: 0.8301209623239503
+    PSNR: 30.045714733329014
+    SSIM: 0.9673461651104146
+    """

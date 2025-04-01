@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 
 class EMA:
@@ -49,6 +50,7 @@ class SelfAttention(nn.Module):
     def forward(self, x):
         x = x.view(-1, self.channels, self.size * self.size).swapaxes(1, 2)
         x_ln = self.ln(x)
+        x_ln = x_ln
         attention_value, _ = self.mha(x_ln, x_ln, x_ln)
         attention_value = attention_value + x
         attention_value = self.ff_self(attention_value) + attention_value
@@ -191,19 +193,22 @@ class UNet_conditional(nn.Module):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
-        self.inc = DoubleConv(c_in, image_size)
+        self.image_size = image_size
+        self.inc = DoubleConv(c_in, 64)
         self.down1 = Down(64, 128)
         self.sa1 = SelfAttention(128, image_size//2)
-        self.down2 = Down(128, 256)
-        self.sa2 = SelfAttention(256, image_size//4)
-        self.down3 = Down(256, 256)
-        self.sa3 = SelfAttention(256, image_size//8)
+        self.down2 = Down(128, 196)
+        self.sa2 = SelfAttention(196, image_size//4)
+        self.down3 = Down(196, 196)
+        self.sa3 = SelfAttention(196, image_size//8)
 
-        self.bot1 = DoubleConv(256, 512)
-        self.bot2 = DoubleConv(512, 512)
-        self.bot3 = DoubleConv(512, 256)
+        self.bot1 = DoubleConv(196, 392)
+        self.bot2 = DoubleConv(392, 392)
+        self.bot3 = DoubleConv(392, 196)
 
-        self.up1 = Up(512, 128)
+        # x = self.up2(x, x2, t)
+
+        self.up1 = Up(392, 128)
         self.sa4 = SelfAttention(128, image_size//4)
         self.up2 = Up(256, 64)
         self.sa5 = SelfAttention(64, image_size//2)
@@ -237,27 +242,47 @@ class UNet_conditional(nn.Module):
     def forward(self, x, t, rain_fft):
         """
         Inputs:
-        x : an BxNx6 array, where the first BxNx3 is the magnitude component of the 
+        x : an BxWxHx6 array, where the first BxNx3 is the magnitude component of the 
             difference, and the last BxNx3 is the phase component of the difference
         t : The timestep, higher t = more noise 
         
-        rain_fft : An BxNx6 array, which is the obtained by concatenating
+        rain_fft : An BxWxHx6 array, which is the obtained by concatenating
                                     the phase and magnitude components of the rained image, 
                                     same to the structure of x
         """
+
+        """
+        
+        x.shape torch.Size([16, 6, 64, 64])
+        x1.shape torch.Size([16, 64, 64, 64])
+        x2.shape torch.Size([16, 128, 32, 32])
+        x2.shape torch.Size([16, 128, 32, 32])
+        x3.shape torch.Size([16, 256, 16, 16])
+        x3.shape torch.Size([16, 256, 16, 16])
+        x4.shape torch.Size([16, 256, 8, 8])
+        x4.shape torch.Size([16, 256, 8, 8])
+                                                            
+        x.shape torch.Size([16, 6, 250, 250])
+        x1.shape torch.Size([16, 64, 250, 250])
+        x2.shape torch.Size([16, 128, 125, 125])
+        
+        """
+        
+
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
+        # x = x
         if rain_fft is not None:
+            # rain_fft = rain_fft.to(torch.float16)
             t += self.mag_and_phase_encoder(rain_fft)
-
-
 
 
         x1 = self.inc(x)
         x2 = self.down1(x1, t)
 
         x2 = self.sa1(x2)
+
         x3 = self.down2(x2, t)
         x3 = self.sa2(x3)
         x4 = self.down3(x3, t)
@@ -269,6 +294,7 @@ class UNet_conditional(nn.Module):
 
         x = self.up1(x4, x3, t)
         x = self.sa4(x)
+
         x = self.up2(x, x2, t)
         x = self.sa5(x)
         x = self.up3(x, x1, t)

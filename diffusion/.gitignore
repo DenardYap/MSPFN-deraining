@@ -2,3 +2,11 @@ dataset/
 experiments/
 runs/
 results/
+__pycache__/
+*.jpg
+*.jpeg
+*.png
+*.pdf
+*.pth
+*.log
+*.event

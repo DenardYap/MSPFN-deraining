@@ -14,29 +14,31 @@ import sys
 import time
 from metric import * 
 
-dataset_name = "R100H"
-predict_folder = f"/Users/bernardyap/Desktop/UofM/WN25/EECS 556/Deraining/model/test/test_data/{dataset_name}_predict"
-groundtruth_folder = f"/Users/bernardyap/Desktop/UofM/WN25/EECS 556/Deraining/model/test/test_data/{dataset_name}/cleancrop"
+# dataset_names = ["bilateral_filter", "bilateral_filter_implementation2", "direction_filtered_images", "edge_enhanced", "gaussian_filter", "median_filter", "median_filter_implementation2", "nlm_implementation2"]
+dataset_names = ["wiener_filter"]
+for dataset_name in dataset_names:
+    predict_folder = f"/Users/bernardyap/Desktop/UofM/WN25/EECS 556/Deraining/model/test/test_data/{dataset_name}_predict"
+    groundtruth_folder = f"/Users/bernardyap/Desktop/UofM/WN25/EECS 556/Deraining/model/test/test_data/R100H/cleancrop"
 
-files = os.listdir(predict_folder)
-count = len(files)
+    files = os.listdir(predict_folder)
+    count = len(files)
 
-SSIM = 0 
-FSIM = 0 
-PSNR = 0 
+    SSIM = 0 
+    FSIM = 0 
+    PSNR = 0 
 
-start_time = time.time()
-for image_name in files:
-    print(image_name)
-    predict_path = os.path.join(predict_folder, image_name)
-    groundtruth_path = os.path.join(groundtruth_folder, image_name)
-    SSIM += calculate_ssim(predict_path, groundtruth_path)
-    FSIM += calculate_fsim(predict_path, groundtruth_path)
-    PSNR += calculate_psnr(predict_path, groundtruth_path)
+    start_time = time.time()
+    for image_name in files:
+        # print(image_name)
+        predict_path = os.path.join(predict_folder, image_name)
+        groundtruth_path = os.path.join(groundtruth_folder, image_name)
+        SSIM += calculate_ssim(predict_path, groundtruth_path)
+        FSIM += calculate_fsim(predict_path, groundtruth_path)
+        PSNR += calculate_psnr(predict_path, groundtruth_path)
 
-end_time = time.time()
-print(f"Took {end_time - start_time}s")
-print(f"Total images {count}")
-print(f"Average SSIM: {SSIM/count}")
-print(f"Average FSIM: {FSIM/count}")
-print(f"Average PSNR: {PSNR/count}")
+    end_time = time.time()
+    print(f"Took {end_time - start_time}s for dataset {dataset_name}")
+    print(f"Total images {count}")
+    print(f"Average SSIM: {SSIM/count}")
+    print(f"Average FSIM: {FSIM/count}")
+    print(f"Average PSNR: {PSNR/count}")

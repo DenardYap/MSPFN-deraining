@@ -22,12 +22,7 @@ def save_images(images, path, **kwargs):
 
 
 def get_data(args):
-    transforms = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(256),  # args.image_size + 1/4 *args.image_size
-        # torchvision.transforms.RandomResizedCrop(args.image_size, scale=(0.8, 1.0)), # TODO: maybe try without this 
-        torchvision.transforms.ToTensor(),
-    ])
-    dataset = FFTDataset(args.dataset_path, args.image_size, None, None)
+    dataset = FFTDataset(args.dataset_path, args.diff_stats_csv_file, args.rain_stats_csv_file, args.image_size)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     return dataloader
 
