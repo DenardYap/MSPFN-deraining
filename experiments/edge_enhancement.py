@@ -91,18 +91,23 @@ def horizontal_blur(image, kernel_width=15):
     return cv2.blur(image, ksize=(kernel_width, 1))
 
 
-image_path = "../model/test/test_data/R100H/inputcrop/1.png"
+image_path = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop/1.png"
 original = cv2.imread(image_path)
-input_dir = '../model/test/test_data/R100H/inputcrop'
-output_dir = '../outputs/edge_directional_bilateral'
+if original is None:
+    raise FileNotFoundError(f"Failed to load image from {image_path}")
+else:
+    print("Loaded image shape:", original.shape)
+
+#input_dir = '../model/test/test_data/R100H/inputcrop'
+#output_dir = '../outputs/edge_directional_bilateral'
 
 filtered_freq = directional_filter_color(original)
 combined_result = refine_with_edge_enhancement(filtered_freq)
 brightened_result = selective_brighten(combined_result, threshold=100, brighten_factor=1.4)
 enhance_details_result = enhance_details_bilateral(brightened_result, sigma_color=30, sigma_space=30, detail_boost=1.5)
 horiz_blurred = horizontal_blur(brightened_result, kernel_width=5)
-brightened_result = selective_brighten(combined_result, threshold=80, brighten_factor=8)
-
+brightened_result = selective_brighten(horiz_blurred, threshold=80, brighten_factor=1.1)
+"""
 for filename in tqdm(os.listdir(input_dir)):
     if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
         input_path = os.path.join(input_dir, filename)
@@ -123,7 +128,7 @@ for filename in tqdm(os.listdir(input_dir)):
 
         # Save the result
         cv2.imwrite(output_path, final)
-
+"""
 plt.figure(figsize=(16, 8))
 plt.subplot(1, 2, 1)
 plt.imshow(cv2.cvtColor(original, cv2.COLOR_BGR2RGB))
@@ -131,8 +136,8 @@ plt.title("Original Image")
 plt.axis('off')
 
 plt.subplot(1, 2, 2)
-plt.imshow(cv2.cvtColor(horiz_blurred, cv2.COLOR_BGR2RGB))
-plt.title("Combined Result")
+plt.imshow(cv2.cvtColor(brightened_result, cv2.COLOR_BGR2RGB))
+plt.title("Directional + Edge Enhancement + Bilateral + Brightening Result")
 plt.axis('off')
 
 plt.tight_layout()
