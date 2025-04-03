@@ -36,6 +36,60 @@ def generate_fft(img_path, resize_shape=None):
     orig_magnitude_spectrum = cv2.merge([mag_r, mag_g, mag_b])
     return magnitude_spectrum, phase_spectrum, orig_magnitude_spectrum
 
+def generate_fft_YCRCB(img_path, resize_shape=None):
+    
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+
+    if img is None:  # If the image is not read successfully
+        raise Exception(f"Error: Could not read image at {img_path}")
+    
+    if resize_shape:
+        img = cv2.resize(img, (resize_shape, resize_shape))
+
+    Y, Cr, Cb = cv2.split(img)
+    fft_Y = np.fft.fft2(Y)
+    fft_Cr = np.fft.fft2(Cr)
+    fft_Cb = np.fft.fft2(Cb)
+    fft_Y_shifted = np.fft.fftshift(fft_Y)
+    fft_Cr_shifted = np.fft.fftshift(fft_Cr)
+    fft_Cb_shifted = np.fft.fftshift(fft_Cb)
+    mag_Y, phase_Y = np.abs(fft_Y_shifted), np.angle(fft_Y_shifted)
+    mag_Cr, phase_Cr = np.abs(fft_Cr_shifted), np.angle(fft_Cr_shifted)
+    mag_Cb, phase_Cb = np.abs(fft_Cb_shifted), np.angle(fft_Cb_shifted)
+    mag_Y_spectrum = np.log1p(mag_Y)
+    mag_Cr_spectrum = np.log1p(mag_Cr)
+    mag_Cb_spectrum = np.log1p(mag_Cb)
+    # mag_Y_spectrum = (mag_Y_spectrum / np.max(mag_Y_spectrum) * 255).astype(np.uint8)
+    # mag_Cr_spectrum = (mag_Cr_spectrum / np.max(mag_Cr_spectrum) * 255).astype(np.uint8)
+    # mag_Cr_spectrum = (mag_Cr_spectrum / np.max(mag_Cr_spectrum) * 255).astype(np.uint8)
+    # NOTE: OpenCV uses BGR convention
+    magnitude_spectrum = cv2.merge([mag_Y_spectrum, mag_Cr_spectrum, mag_Cb_spectrum])
+    phase_spectrum = cv2.merge([phase_Y, phase_Cr, phase_Cb])
+    orig_magnitude_spectrum = cv2.merge([mag_Y, mag_Cr, mag_Cb])
+    return magnitude_spectrum, phase_spectrum, orig_magnitude_spectrum
+
+def generate_fft_YCRCB_training(img_path, resize_shape=None):
+    
+    img = cv2.imread(img_path)
+
+    if img is None:  # If the image is not read successfully
+        raise Exception(f"Error: Could not read image at {img_path}")
+    
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    if resize_shape:
+        img = cv2.resize(img, (resize_shape, resize_shape))
+
+    Y, _, _ = cv2.split(img)
+    fft_Y = np.fft.fft2(Y)
+    fft_Y_shifted = np.fft.fftshift(fft_Y)
+    mag_Y, phase_Y = np.abs(fft_Y_shifted), np.angle(fft_Y_shifted)
+    mag_Y_spectrum = np.log1p(mag_Y)
+    magnitude_spectrum = cv2.merge([mag_Y_spectrum])
+    phase_spectrum = cv2.merge([phase_Y])
+    orig_magnitude_spectrum = cv2.merge([mag_Y])
+    return magnitude_spectrum, phase_spectrum, orig_magnitude_spectrum
+
 def normalize_mag(mag):
     mag_spectrum = np.log1p(mag)
     mag_spectrum = (mag_spectrum / np.max(mag_spectrum) * 255).astype(np.uint8)
@@ -152,7 +206,7 @@ def reconstruct_from_rain_and_diff_mag_and_phase(groundtruth_image_path, rain_im
     FFT (phase) of Original Image, FFT (phase) of Rain Image 
     Diff (mag) of FFT, Diff (phase) of FFT
       reconstructed image from 
-    """
+    """ 
 
     # Magnitude are ints, so it has to be in range [0, 255] 
     magnitude_spectrum_gt, phase_spectrum_gt, orig_magnitude_spectrum_gt = generate_fft(groundtruth_image_path)

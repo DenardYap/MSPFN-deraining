@@ -50,11 +50,11 @@ class SelfAttention(nn.Module):
     def forward(self, x):
         x = x.view(-1, self.channels, self.size * self.size).swapaxes(1, 2)
         x_ln = self.ln(x)
-        x_ln = x_ln
         attention_value, _ = self.mha(x_ln, x_ln, x_ln)
         attention_value = attention_value + x
         attention_value = self.ff_self(attention_value) + attention_value
         return attention_value.swapaxes(2, 1).view(-1, self.channels, self.size, self.size)
+
 
 
 class DoubleConv(nn.Module):
@@ -245,36 +245,110 @@ class UNet_conditional(nn.Module):
         x : an BxWxHx6 array, where the first BxNx3 is the magnitude component of the 
             difference, and the last BxNx3 is the phase component of the difference
         t : The timestep, higher t = more noise 
-        
-        rain_fft : An BxWxHx6 array, which is the obtained by concatenating
-                                    the phase and magnitude components of the rained image, 
-                                    same to the structure of x
-        """
-
-        """
-        
-        x.shape torch.Size([16, 6, 64, 64])
-        x1.shape torch.Size([16, 64, 64, 64])
-        x2.shape torch.Size([16, 128, 32, 32])
-        x2.shape torch.Size([16, 128, 32, 32])
-        x3.shape torch.Size([16, 256, 16, 16])
-        x3.shape torch.Size([16, 256, 16, 16])
-        x4.shape torch.Size([16, 256, 8, 8])
-        x4.shape torch.Size([16, 256, 8, 8])
-                                                            
-        x.shape torch.Size([16, 6, 250, 250])
-        x1.shape torch.Size([16, 64, 250, 250])
-        x2.shape torch.Size([16, 128, 125, 125])
-        
+        rain_fft : The condition, which is an BxWxHx6 array, and is obtained by concatenating
+                   the phase and magnitude components of the rained image, same to the structure of x
         """
         
 
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
-        # x = x
         if rain_fft is not None:
-            # rain_fft = rain_fft.to(torch.float16)
+            t += self.mag_and_phase_encoder(rain_fft)
+
+
+        x1 = self.inc(x)
+        x2 = self.down1(x1, t)
+
+        x2 = self.sa1(x2)
+
+        x3 = self.down2(x2, t)
+        x3 = self.sa2(x3)
+        x4 = self.down3(x3, t)
+        x4 = self.sa3(x4)
+
+        x4 = self.bot1(x4)
+        x4 = self.bot2(x4)
+        x4 = self.bot3(x4)
+
+        x = self.up1(x4, x3, t)
+        x = self.sa4(x)
+
+        x = self.up2(x, x2, t)
+        x = self.sa5(x)
+        x = self.up3(x, x1, t)
+        x = self.sa6(x)
+        output = self.outc(x)
+        return output
+    
+class UNet_conditional_YCrCb(nn.Module):
+    def __init__(self, image_size=64, c_in=2, c_out=2, time_dim=256, device="cuda"):
+        super().__init__()
+        self.device = device
+        self.time_dim = time_dim
+        self.image_size = image_size
+        self.inc = DoubleConv(c_in, 64)
+        self.down1 = Down(64, 128)
+        self.sa1 = SelfAttention(128, image_size//2)
+        self.down2 = Down(128, 196)
+        self.sa2 = SelfAttention(196, image_size//4)
+        self.down3 = Down(196, 196)
+        self.sa3 = SelfAttention(196, image_size//8)
+
+        self.bot1 = DoubleConv(196, 392)
+        self.bot2 = DoubleConv(392, 392)
+        self.bot3 = DoubleConv(392, 196)
+
+        # x = self.up2(x, x2, t)
+
+        self.up1 = Up(392, 128)
+        self.sa4 = SelfAttention(128, image_size//4)
+        self.up2 = Up(256, 64)
+        self.sa5 = SelfAttention(64, image_size//2)
+        self.up3 = Up(128, 64)
+        self.sa6 = SelfAttention(64, image_size)
+        self.outc = nn.Conv2d(64, c_out, kernel_size=1)
+
+        self.mag_and_phase_encoder = nn.Sequential(
+            nn.Conv2d(c_in, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((1, 1)), 
+            nn.Flatten(),
+            nn.Linear(256, time_dim) 
+        )
+
+
+    def pos_encoding(self, t, channels):
+        inv_freq = 1.0 / (
+            10000
+            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+        )
+        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
+        return pos_enc
+
+    def forward(self, x, t, rain_fft):
+        """
+        Inputs:
+        x : an BxWxHx2 array, where the first BxNx1 is the magnitude component of the 
+            difference in the Y channel, and the last BxNx1 is the phase component of the difference
+            in the Y channel as well
+        t : The timestep, higher t = more noise 
+        rain_fft : The condition, which is an BxWxHx2 array, and is obtained by concatenating
+                   the phase and magnitude components of the rained image in the Y channel, 
+                   same to the structure of x
+        """
+        
+
+        t = t.unsqueeze(-1).type(torch.float)
+        t = self.pos_encoding(t, self.time_dim)
+
+        if rain_fft is not None:
             t += self.mag_and_phase_encoder(rain_fft)
 
 
