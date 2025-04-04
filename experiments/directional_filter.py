@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import cv2
 from utils import *
 import os
+from directional_filter import DirectionalFilter
+
 '''
 Micah Williamson
 University of Michigan
@@ -164,16 +166,16 @@ class DirectionalFilter:
         return cv2.cvtColor(YCrCb_new, cv2.COLOR_YCR_CB2BGR)
 
 
-
+"""
 def main():
     # Looks like R100H only has 320x480 and 480x320 images, so we can build the
     # filter dimensions in up front to avoid redoing it for each image
     df_320_480 = DirectionalFilter(M=320, N=480)
     df_480_320 = DirectionalFilter(M=480, N=320)
-    base_path = '/Users/micahwilliamson/code/ECE556/MSPFN-deraining/model/test/' \
-    'test_data/R100H/inputcrop/'
-    write_path = '/Users/micahwilliamson/code/ECE556/MSPFN-deraining/' \
-    'experiments/direction_filtered_images/'
+    """
+base_path = '/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop'
+write_path = '/Users/gennadumont/Downloads/MSPFN-deraining/outputs/directional'
+"""
     for filename in os.listdir(base_path):
         im = cv2.imread((base_path + filename))
         if im.shape[0] == 320:
@@ -189,4 +191,10 @@ def main():
 if __name__=="__main__":
     main()
 
+"""
 
+
+def myFunc():
+   df=DirectionalFilter()
+   image = cv2.imread(base_path)
+   image_filtered = df.apply_filter(image)
