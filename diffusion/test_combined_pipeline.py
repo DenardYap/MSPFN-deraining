@@ -3,7 +3,7 @@
 import cv2
 import matplotlib.pyplot as plt
 from directional_filter import DirectionalFilter
-from fft_and_filter import generate_fft
+from fft_and_filter import generate_fft, generate_fft_from_image
 from fft_helpers import reconstruct_from_fft_return
 
 # === File Paths ===
@@ -18,7 +18,7 @@ filtered_img = df.apply_filter(rain_img)
 # === Step 2: Run FFT Analysis ===
 # Get magnitude and phase from both GT and filtered rain image
 mag_gt, phase_gt, raw_mag_gt = generate_fft(gt_path)
-mag_filtered, phase_filtered, raw_mag_filtered = generate_fft(filtered_img)
+mag_filtered, phase_filtered, raw_mag_filtered = generate_fft_from_image(filtered_img)
 
 # === Step 3: Compare FFT Differences ===
 diff_mag = raw_mag_gt - raw_mag_filtered

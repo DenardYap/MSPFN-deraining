@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import cv2
 from utils import *
 import os
-from directional_filter import DirectionalFilter
 
 '''
 Micah Williamson

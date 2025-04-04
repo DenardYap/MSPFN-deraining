@@ -434,8 +434,8 @@ if __name__ == "__main__":
 """
 
 
-image_path = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop/1.png"
 
+"""
 # Generate FFT (magnitude and phase)
 magnitude, phase, orig_mag = generate_fft(image_path)
 
@@ -468,3 +468,28 @@ plt.axis("off")
 
 plt.tight_layout()
 plt.show()
+
+"""
+
+image_path = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop/1.png"
+
+img = cv2.imread(image_path)
+ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+Y, Cr, Cb = cv2.split(ycrcb)
+
+# FFT on just Y
+f_Y = np.fft.fft2(Y)
+fshift_Y = np.fft.fftshift(f_Y)
+magnitude_Y = np.abs(fshift_Y)
+phase_Y = np.angle(fshift_Y)
+
+
+# Apply inverse FFT to filtered_Y (after masking)
+"""
+f_ishift = np.fft.ifftshift(filtered_fshift_Y)
+Y_filtered = np.abs(np.fft.ifft2(f_ishift))
+Y_filtered = np.clip(Y_filtered, 0, 255).astype(np.uint8)
+
+filtered_ycrcb = cv2.merge((Y_filtered, Cr, Cb))
+final_image = cv2.cvtColor(filtered_ycrcb, cv2.COLOR_YCrCb2BGR)
+"""

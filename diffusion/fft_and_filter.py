@@ -27,10 +27,18 @@ def ideal_highpass_filter(shape, cutoff):
     mask[d < cutoff] = 0  # Zero out low frequencies
     return mask
 
-image = cv2.imread("giraffe_rain.png", cv2.IMREAD_GRAYSCALE)
+def apply_wiener_color(img, kernel_size=(10, 10)):
+    filtered_channels = []
+    for i in range(3):  # loop over R, G, B
+        channel = img[:, :, i]
+        filtered_channel = wiener(channel, kernel_size)
+        filtered_channels.append(filtered_channel)
+    return cv2.merge(filtered_channels)
 
-filtered_image = wiener(image, (10, 10)) 
-filtered_image = np.clip(filtered_image, 0, 255).astype(np.uint8)
+img = cv2.imread("/Users/gennadumont/Downloads/MSPFN-deraining/diffusion/giraffe_rain.png")
+
+filtered_image = apply_wiener_color(img, (10, 10))
+
 """
 # Display results
 plt.figure(figsize=(12, 4))
@@ -47,7 +55,7 @@ plt.axis("off")
 plt.savefig("filtered.png")
 """
 
-def generate_fft(image_path, output_image="fft_image.png", output_npz="fft_data.npz"):
+def generate_fft(image_path):
     img = cv2.imread(image_path)
     if img is None:
         raise ValueError("Failed to load image. Check the path.")
@@ -60,21 +68,56 @@ def generate_fft(image_path, output_image="fft_image.png", output_npz="fft_data.
     fft_r_shifted = np.fft.fftshift(fft_r)
     fft_g_shifted = np.fft.fftshift(fft_g)
     fft_b_shifted = np.fft.fftshift(fft_b)
+
     mag_r, phase_r = np.abs(fft_r_shifted), np.angle(fft_r_shifted)
     mag_g, phase_g = np.abs(fft_g_shifted), np.angle(fft_g_shifted)
     mag_b, phase_b = np.abs(fft_b_shifted), np.angle(fft_b_shifted)
+
     mag_r_spectrum = np.log1p(mag_r)
     mag_g_spectrum = np.log1p(mag_g)
     mag_b_spectrum = np.log1p(mag_b)
+
     mag_r_spectrum = (mag_r_spectrum / np.max(mag_r_spectrum) * 255).astype(np.uint8)
     mag_g_spectrum = (mag_g_spectrum / np.max(mag_g_spectrum) * 255).astype(np.uint8)
     mag_b_spectrum = (mag_b_spectrum / np.max(mag_b_spectrum) * 255).astype(np.uint8)
-    magnitude_spectrum = cv2.merge([mag_b_spectrum, mag_g_spectrum, mag_r_spectrum])
-    cv2.imwrite(output_image, magnitude_spectrum)
-    np.savez(output_npz, mag_r=mag_r, phase_r=phase_r, mag_g=mag_g, phase_g=phase_g, mag_b=mag_b, phase_b=phase_b)
 
-    print(f"FFT color image saved as: {output_image}")
-    print(f"FFT data (magnitude & phase) saved as: {output_npz}")
+    magnitude_spectrum = cv2.merge([mag_b_spectrum, mag_g_spectrum, mag_r_spectrum])
+    phase_spectrum = cv2.merge([phase_r, phase_g, phase_b])
+    orig_magnitude_spectrum = cv2.merge([mag_r, mag_g, mag_b])
+
+    return magnitude_spectrum, phase_spectrum, orig_magnitude_spectrum
+
+def generate_fft_from_image(img):
+    if img is None:
+        raise ValueError("Image is None")
+
+    b, g, r = cv2.split(img)
+
+    fft_r = np.fft.fft2(r)
+    fft_g = np.fft.fft2(g)
+    fft_b = np.fft.fft2(b)
+    fft_r_shifted = np.fft.fftshift(fft_r)
+    fft_g_shifted = np.fft.fftshift(fft_g)
+    fft_b_shifted = np.fft.fftshift(fft_b)
+
+    mag_r, phase_r = np.abs(fft_r_shifted), np.angle(fft_r_shifted)
+    mag_g, phase_g = np.abs(fft_g_shifted), np.angle(fft_g_shifted)
+    mag_b, phase_b = np.abs(fft_b_shifted), np.angle(fft_b_shifted)
+
+    mag_r_spectrum = np.log1p(mag_r)
+    mag_g_spectrum = np.log1p(mag_g)
+    mag_b_spectrum = np.log1p(mag_b)
+
+    mag_r_spectrum = (mag_r_spectrum / np.max(mag_r_spectrum) * 255).astype(np.uint8)
+    mag_g_spectrum = (mag_g_spectrum / np.max(mag_g_spectrum) * 255).astype(np.uint8)
+    mag_b_spectrum = (mag_b_spectrum / np.max(mag_b_spectrum) * 255).astype(np.uint8)
+
+    magnitude_spectrum = cv2.merge([mag_b_spectrum, mag_g_spectrum, mag_r_spectrum])
+    phase_spectrum = cv2.merge([phase_r, phase_g, phase_b])
+    orig_magnitude_spectrum = cv2.merge([mag_r, mag_g, mag_b])
+
+    return magnitude_spectrum, phase_spectrum, orig_magnitude_spectrum
+
 
 def reconstruct_from_fft_filtered(input_npz="fft_data.npz", output_image="reconstructed_filtered.png", cutoff=30, order=1):
     data = np.load(input_npz)
@@ -234,7 +277,7 @@ def vertical_average_filter(image, kernel_size=5):
     # Apply filter using OpenCV
     return cv2.filter2D(image, -1, kernel)
 
-
+"""
 image = cv2.imread("rain.png")
 mask_filter = gennas_test(image.shape, fraction=0.25, inner_value=1.0, outer_value=0.7)
 
@@ -279,4 +322,4 @@ for i in range(6):
     plt.axis("off")
 
 plt.tight_layout()
-plt.show()
+plt.show()"""
