@@ -1,6 +1,3 @@
-
-#COPIED DIRECTLY FROM MAIN BRANCH 
-
 import numpy as np
 import cv2
 from PIL import Image
@@ -430,7 +427,44 @@ def visualize_fft(img_path, output_name="viz.png", resize_shape=None):
     plt.savefig(output_name)
 
 
-
+"""
 if __name__ == "__main__":
     generate_fft_and_save_to_npz("dataset/images_rain/801_1.jpg", "801_1.jpg", "801_1.npz")
     reconstruct_from_fft_npz("801_1.npz", "801_1_recon.jpeg")
+"""
+
+
+image_path = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop/1.png"
+
+# Generate FFT (magnitude and phase)
+magnitude, phase, orig_mag = generate_fft(image_path)
+
+# Reconstruct image from FFT
+reconstructed = reconstruct_from_fft_return(
+    orig_mag[:, :, 2],  # R
+    orig_mag[:, :, 1],  # G
+    orig_mag[:, :, 0],  # B
+    phase[:, :, 2],     # R
+    phase[:, :, 1],     # G
+    phase[:, :, 0],     # B
+)
+
+# Load and convert original image for comparison
+original = cv2.imread(image_path)
+original_rgb = cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
+reconstructed_rgb = cv2.cvtColor(reconstructed, cv2.COLOR_BGR2RGB)
+
+# Display
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.imshow(original_rgb)
+plt.title("Original")
+plt.axis("off")
+
+plt.subplot(1, 2, 2)
+plt.imshow(reconstructed_rgb)
+plt.title("Reconstructed from FFT")
+plt.axis("off")
+
+plt.tight_layout()
+plt.show()
