@@ -1,3 +1,6 @@
+"""
+Training the diffusion model with the UNet_conditional_YCrCb model (no cross attention)
+"""
 import os
 import copy
 import numpy as np
@@ -17,7 +20,7 @@ torch.cuda.empty_cache()
 torch.cuda.ipc_collect()
 # logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
-dir = "weights_YCrCb_ca"
+dir = "weights_YCrCb"
 os.makedirs(dir, exist_ok=True)
 logging.basicConfig(
     filename=f'{dir}/training.log', 
@@ -155,6 +158,7 @@ def train(args):
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
     logger = SummaryWriter(os.path.join("runs", args.run_name))
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.8, min_lr=1e-16)
     # TODO: add pleteau learning rate scheduler 
 
     l = len(dataloader)
@@ -225,6 +229,7 @@ def train(args):
                 filename = f'{dir}/{actual_epoch}.pth'
                 torch.save(model.state_dict(), filename)
                 print("Saved {filename} at last epoch.")
+            scheduler.step(avg_train_loss)
 
 
     except Exception as e:
@@ -271,9 +276,9 @@ def launch():
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
-    args.load_state_dict = True
-    args.epoch_start = 9
-    args.lr = 5e-4
+    args.load_state_dict = False
+    args.epoch_start = 0
+    args.lr = 3e-4
     train(args)
 
 

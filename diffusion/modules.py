@@ -5,6 +5,11 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 
+# Useful debugging function to check if any value is NaN during training
+def check_nan(tensor, name):
+    if torch.isnan(tensor).any():
+        raise ValueError(f"NaN in {name}")
+        
 class EMA:
     def __init__(self, beta):
         super().__init__()
@@ -32,7 +37,42 @@ class EMA:
     def reset_parameters(self, ema_model, model):
         ema_model.load_state_dict(model.state_dict())
 
+    
 
+class CrossAttention(nn.Module):
+    def __init__(self, channels, context_channels, num_heads=4):
+        super().__init__()
+        self.context_norm = nn.GroupNorm(1, context_channels)
+        self.mha = nn.MultiheadAttention(channels, num_heads, batch_first=True)
+        self.ln = nn.LayerNorm([channels])
+        self.head_dim = channels // num_heads
+        self.scale = self.head_dim ** -0.5  
+
+        self.context_proj = nn.Sequential(
+            nn.Conv2d(context_channels, 2*channels, kernel_size=1),
+            nn.GroupNorm(1, 2*channels)  # Equivalent to LayerNorm for channels
+
+        )
+
+    def forward(self, x, context):
+        context = self.context_norm(context) 
+        B, C, H, W = x.shape
+        x_flat = x.view(B, C, H*W).permute(0, 2, 1)  # (B, H*W, C)
+        x_ln = self.ln(x_flat)
+        
+        # Project context to keys and values
+        kv = self.context_proj(context)  # (B, 2*C, H_ctx, W_ctx)
+        k, v = kv.chunk(2, dim=1)  # (B, C, H_ctx, W_ctx) each
+        
+        k = k.view(B, C, -1).permute(0, 2, 1)  # (B, H_ctx*W_ctx, C)
+        v = v.view(B, C, -1).permute(0, 2, 1)  # (B, H_ctx*W_ctx, C)
+        
+        attn_output, _ = self.mha(x_ln, k, v)
+        attn_output = attn_output * self.scale  
+        attn_output = attn_output + x_flat
+        attn_output = attn_output.permute(0, 2, 1).view(B, C, H, W)
+        return attn_output
+    
 class SelfAttention(nn.Module):
     def __init__(self, channels, size):
         super(SelfAttention, self).__init__()
@@ -70,7 +110,6 @@ class DoubleConv(nn.Module):
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.GroupNorm(1, out_channels),
         )
-
     def forward(self, x):
         if self.residual:
             return F.gelu(x + self.double_conv(x))
@@ -128,28 +167,94 @@ class Up(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, c_in=3, c_out=3, time_dim=256, device="cuda"):
+    def __init__(self, image_size=64, c_in=2, c_out=2, time_dim=256, device="cuda"):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
+        self.image_size = image_size
         self.inc = DoubleConv(c_in, 64)
         self.down1 = Down(64, 128)
-        self.sa1 = SelfAttention(128, 32)
-        self.down2 = Down(128, 256)
-        self.sa2 = SelfAttention(256, 16)
-        self.down3 = Down(256, 256)
-        self.sa3 = SelfAttention(256, 8)
+        self.sa1 = SelfAttention(128, image_size//2)
+        self.down2 = Down(128, 196)
+        self.sa2 = SelfAttention(196, image_size//4)
+        self.down3 = Down(196, 196)
+        self.sa3 = SelfAttention(196, image_size//8)
 
-        self.bot1 = DoubleConv(256, 512)
-        self.bot2 = DoubleConv(512, 512)
-        self.bot3 = DoubleConv(512, 256)
+        self.bot1 = DoubleConv(196, 392)
+        self.bot2 = DoubleConv(392, 392)
+        self.bot3 = DoubleConv(392, 196)
 
-        self.up1 = Up(512, 128)
-        self.sa4 = SelfAttention(128, 16)
+        # x = self.up2(x, x2, t)
+
+        self.up1 = Up(392, 128)
+        self.sa4 = SelfAttention(128, image_size//4)
         self.up2 = Up(256, 64)
-        self.sa5 = SelfAttention(64, 32)
+        self.sa5 = SelfAttention(64, image_size//2)
         self.up3 = Up(128, 64)
-        self.sa6 = SelfAttention(64, 64)
+        self.sa6 = SelfAttention(64, image_size)
+        self.outc = nn.Conv2d(64, c_out, kernel_size=1)
+
+    def pos_encoding(self, t, channels):
+        inv_freq = 1.0 / (
+            10000
+            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+        )
+        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
+        return pos_enc
+
+    def forward(self, x, t):
+        t = t.unsqueeze(-1).type(torch.float)
+        t = self.pos_encoding(t, self.time_dim)
+
+        x1 = self.inc(x)
+        x2 = self.down1(x1, t)
+        x2 = self.sa1(x2)
+        x3 = self.down2(x2, t)
+        x3 = self.sa2(x3)
+        x4 = self.down3(x3, t)
+        x4 = self.sa3(x4)
+
+        x4 = self.bot1(x4)
+        x4 = self.bot2(x4)
+        x4 = self.bot3(x4)
+
+        x = self.up1(x4, x3, t)
+        x = self.sa4(x)
+        x = self.up2(x, x2, t)
+        x = self.sa5(x)
+        x = self.up3(x, x1, t)
+        x = self.sa6(x)
+        output = self.outc(x)
+        return output
+    
+class UNet_Mag_Only(nn.Module):
+    def __init__(self, image_size=64, c_in=1, c_out=1, time_dim=256, device="cuda"):
+        super().__init__()
+        self.device = device
+        self.time_dim = time_dim
+        self.image_size = image_size
+        self.inc = DoubleConv(c_in, 64)
+        self.down1 = Down(64, 128)
+        self.sa1 = SelfAttention(128, image_size//2)
+        self.down2 = Down(128, 196)
+        self.sa2 = SelfAttention(196, image_size//4)
+        self.down3 = Down(196, 196)
+        self.sa3 = SelfAttention(196, image_size//8)
+
+        self.bot1 = DoubleConv(196, 392)
+        self.bot2 = DoubleConv(392, 392)
+        self.bot3 = DoubleConv(392, 196)
+
+        # x = self.up2(x, x2, t)
+
+        self.up1 = Up(392, 128)
+        self.sa4 = SelfAttention(128, image_size//4)
+        self.up2 = Up(256, 64)
+        self.sa5 = SelfAttention(64, image_size//2)
+        self.up3 = Up(128, 64)
+        self.sa6 = SelfAttention(64, image_size)
         self.outc = nn.Conv2d(64, c_out, kernel_size=1)
 
     def pos_encoding(self, t, channels):
@@ -282,7 +387,7 @@ class UNet_conditional(nn.Module):
         return output
     
 class UNet_conditional_YCrCb(nn.Module):
-    def __init__(self, image_size=64, c_in=2, c_out=2, time_dim=256, device="cuda"):
+    def __init__(self, image_size=64, c_in=4, c_out=2, time_dim=256, device="cuda"):
         super().__init__()
         self.device = device
         self.time_dim = time_dim
@@ -349,8 +454,10 @@ class UNet_conditional_YCrCb(nn.Module):
         t = self.pos_encoding(t, self.time_dim)
 
         if rain_fft is not None:
-            t += self.mag_and_phase_encoder(rain_fft)
-
+            x = torch.cat([x, rain_fft], dim=1)
+        else:
+            zero_cond = torch.zeros_like(x)
+            x = torch.cat([x, zero_cond], dim=1)
 
         x1 = self.inc(x)
         x2 = self.down1(x1, t)
@@ -373,6 +480,133 @@ class UNet_conditional_YCrCb(nn.Module):
         x = self.sa5(x)
         x = self.up3(x, x1, t)
         x = self.sa6(x)
+        output = self.outc(x)
+        return output
+    
+# YCrCb UNet but with cross attention
+class UNet_conditional_YCrCb_CA(nn.Module):
+    def __init__(self, image_size=64, c_in=2, c_out=2, time_dim=256, device="cuda"):
+        self.c_in = c_in
+        super().__init__()
+        self.device = device
+        self.time_dim = time_dim
+        self.image_size = image_size
+        self.inc = DoubleConv(c_in, 64)
+        self.down1 = Down(64, 128)
+        self.sa1 = SelfAttention(128, image_size//2)
+        self.ca1 = CrossAttention(128, context_channels=256)
+
+        self.down2 = Down(128, 196)
+        self.sa2 = SelfAttention(196, image_size//4)
+        self.ca2 = CrossAttention(196, context_channels=256)
+
+        self.down3 = Down(196, 196)
+        self.sa3 = SelfAttention(196, image_size//8)
+        self.ca3 = CrossAttention(196, context_channels=256)
+
+        self.bot1 = DoubleConv(196, 392)
+        self.bot2 = DoubleConv(392, 392)
+        self.bot3 = DoubleConv(392, 196)
+
+        # x = self.up2(x, x2, t)
+
+        self.up1 = Up(392, 128)
+        self.sa4 = SelfAttention(128, image_size//4)
+        self.ca4 = CrossAttention(128, context_channels=256)
+
+        self.up2 = Up(256, 64)
+        self.sa5 = SelfAttention(64, image_size//2)
+        self.ca5 = CrossAttention(64, context_channels=256)
+
+        self.up3 = Up(128, 64)
+        self.sa6 = SelfAttention(64, image_size)
+        self.ca6 = CrossAttention(64, context_channels=256)
+
+        self.outc = nn.Conv2d(64, c_out, kernel_size=1)
+
+        # self.mag_and_phase_encoder = nn.Sequential(
+        #     nn.Conv2d(c_in, 64, kernel_size=3, stride=1, padding=1),
+        #     nn.ReLU(),
+        #     nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+        #     nn.ReLU(),
+        #     nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+        #     nn.ReLU(),
+        #     nn.AdaptiveAvgPool2d((1, 1)), 
+        #     nn.Flatten(),
+        #     nn.Linear(256, time_dim) 
+        # )
+
+        self.mag_and_phase_encoder = nn.Sequential(
+            nn.Conv2d(c_in, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+        )
+
+
+    def pos_encoding(self, t, channels):
+        inv_freq = 1.0 / (
+            10000
+            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+        )
+        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
+        return pos_enc
+
+    def forward(self, x, t, rain_fft):
+        """
+        Inputs:
+        x : an BxWxHx2 array, where the first BxNx1 is the magnitude component of the 
+            difference in the Y channel, and the last BxNx1 is the phase component of the difference
+            in the Y channel as well
+        t : The timestep, higher t = more noise 
+        rain_fft : The condition, which is an BxWxHx2 array, and is obtained by concatenating
+                   the phase and magnitude components of the rained image in the Y channel, 
+                   same to the structure of x
+        """
+        
+
+        t = t.unsqueeze(-1).type(torch.float)
+        t = self.pos_encoding(t, self.time_dim)
+        if rain_fft is None:
+            rain_fft = torch.zeros(x.size(0), self.c_in, self.image_size, self.image_size).to(x.device)
+            
+        context = self.mag_and_phase_encoder(rain_fft)
+
+        x1 = self.inc(x)
+
+        x2 = self.down1(x1, t)
+        x2 = self.sa1(x2)
+        x2 = self.ca1(x2, context)
+
+        x3 = self.down2(x2, t)
+        x3 = self.sa2(x3)
+        x3 = self.ca2(x3, context)
+
+        x4 = self.down3(x3, t)
+        x4 = self.sa3(x4)
+        x4 = self.ca3(x4, context)
+
+        x4 = self.bot1(x4)
+        x4 = self.bot2(x4)
+        x4 = self.bot3(x4)
+
+        x = self.up1(x4, x3, t)
+        x = self.sa4(x)
+        x = self.ca4(x, context)
+
+        x = self.up2(x, x2, t)
+        x = self.sa5(x)
+        x = self.ca5(x, context)
+
+
+        x = self.up3(x, x1, t)
+        x = self.sa6(x)
+        x = self.ca6(x, context)
+        
         output = self.outc(x)
         return output
 

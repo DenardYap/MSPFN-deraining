@@ -78,7 +78,7 @@ class FFTDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
-
+    
     def __getitem__(self, idx):
         """
         The problem with FFT data is that they have very High-Dynamic Range (HDR)
@@ -102,24 +102,24 @@ class FFTDataset(Dataset):
         _, gt_phase, gt_mag_unnorm = generate_fft(image_path, resize_shape=self.resize_shape)
         _, rain_phase, rain_mag_unnorm = generate_fft(image_rain_path, resize_shape=self.resize_shape)
 
-        diff_phase = (gt_phase - rain_phase) 
-        # diff_phase = (gt_phase - rain_phase) / (2 * np.pi)
-        # rain_phase /= np.pi
+        # diff_phase = (gt_phase - rain_phase) 
+        diff_phase = (gt_phase - rain_phase) / (2 * np.pi)
+        rain_phase /= np.pi
         # Step 1. Get the difference in the original scale 
         diff_mag_unnorm = gt_mag_unnorm - rain_mag_unnorm
         # Step 2. Scale the log values down
         diff_mag_log = signed_log_scale(diff_mag_unnorm)
         # Step 3: Normalize to [-1, 1]
-        # diff_mag_norm = self._normalize(diff_mag_log, self.diff_stats)
+        diff_mag_norm = self._normalize(diff_mag_log, self.diff_stats)
 
         rain_mag_log = signed_log_scale(rain_mag_unnorm)
-        # rain_mag_norm = self._normalize(rain_mag_log, self.rain_stats)        
+        rain_mag_norm = self._normalize(rain_mag_log, self.rain_stats)        
 
         # Concat them to form a WxHx6 matrix
         # The first 3 rows (magnitude) will be in the range [-1, 1]
         # The next 3 rows (phase/angle) will be in the range [-2π, 2π]
-        diff_mag_and_phase = concat_mag_and_phase(diff_mag_log, diff_phase)
-        rain_mag_and_phase = concat_mag_and_phase(rain_mag_log, rain_phase)
+        diff_mag_and_phase = concat_mag_and_phase(diff_mag_norm, diff_phase)
+        rain_mag_and_phase = concat_mag_and_phase(rain_mag_norm, rain_phase)
         assert diff_mag_and_phase.shape[-1] == 6, f"Last dimension is not 6, it is {diff_mag_and_phase.shape[-1]}"
         assert rain_mag_and_phase.shape[-1] == 6, f"Last dimension is not 6, it is {rain_mag_and_phase.shape[-1]}"
 
@@ -130,10 +130,9 @@ class FFTDataset(Dataset):
 
         diff_mag_and_phase = np.float32(diff_mag_and_phase)
         rain_mag_and_phase = np.float32(rain_mag_and_phase) 
-        # assert np.all(diff_mag_and_phase >= -1) and np.all(diff_mag_and_phase <= 1), "Normalization failed for diff!"
-        # assert np.all(rain_mag_and_phase >= -1) and np.all(rain_mag_and_phase <= 1), "Normalization failed for phase!"
-        print(np.max(diff_mag_and_phase), np.min(diff_mag_and_phase))
-        print(np.max(rain_mag_and_phase), np.min(rain_mag_and_phase))
+        assert not np.any(np.isnan(diff_mag_and_phase)), "diff_mag_and_phase contains NaN values"
+        assert not np.any(np.isnan(rain_mag_and_phase)), "rain_mag_and_phase contains NaN values"
+
         return diff_mag_and_phase, rain_mag_and_phase
 
     # def __getitem__(self, idx):

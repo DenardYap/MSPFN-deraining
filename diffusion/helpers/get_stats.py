@@ -18,3 +18,23 @@ def get_stats(stats_csv_file):
         stats = {key: float(value) for key, value in zip(column_names, row)}
 
     return stats
+
+def get_stats_YCrCb(stats_csv_file):
+    column_names = [
+        "mag_Y_max", "mag_Cr_max", "mag_Cb_max",
+        "phase_Y_max", "phase_Cr_max", "phase_Cb_max",
+        "mag_Y_min", "mag_Cr_min", "mag_Cb_min",
+        "phase_Y_min", "phase_Cr_min", "phase_Cb_min",
+        "mag_Y_mean", "mag_Cr_mean", "mag_Cb_mean",
+        "phase_Y_mean", "phase_Cr_mean", "phase_Cb_mean",
+        "mag_Y_std", "mag_Cr_std", "mag_Cb_std",
+        "phase_Y_std", "phase_Cr_std", "phase_Cb_std"
+    ]
+
+    with open(stats_csv_file, mode='r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Skip the header row
+        row = next(reader)  # Read the only data row
+        stats = {key: float(value) for key, value in zip(column_names, row)}
+
+    return stats

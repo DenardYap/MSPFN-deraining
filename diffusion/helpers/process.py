@@ -5,7 +5,7 @@ This is needed as all training data are normalized to the range [-1, 1] before t
 """
 import numpy as np 
 
-def normalize_mag(unnormalized_data : np.ndarray, stats : dict, eps : float = 1e-8):
+def normalize_mag(unnormalized_data : np.ndarray, stats : dict, permute: bool = False, eps : float = 1e-8):
     """
     unnormalized_data (np.ndarray) : A 3xWxH image where the 3 rows are the RGB magnitude 
     
@@ -23,19 +23,48 @@ def normalize_mag(unnormalized_data : np.ndarray, stats : dict, eps : float = 1e
 
     return : normalized data in the range [-1, 1]
     """
-    assert unnormalized_data.shape[0] == 3, f"The first dimension needs to be 3"
+
+    if permute:
+        assert unnormalized_data.shape[2] == 3, f"The last dimension needs to be 3"
+        unnormalized_data = np.transpose(unnormalized_data, (2, 0, 1))
+    else:
+        assert unnormalized_data.shape[0] == 3, f"The first dimension needs to be 3"
 
 
     # Formula: normalized_data = 2 * ((data - min) / (max - min + 1e-8)) - 1    
     # -> data =  (normalized_data + 1) / 2 * (max - min + 1e-8) + min
-    print(stats)
     maxs = np.array([stats["mag_R_max"], stats["mag_G_max"], stats["mag_B_max"]])
     mins = np.array([stats["mag_R_min"], stats["mag_G_min"], stats["mag_B_min"]])
-    print("maxs", maxs)
-    print("mins", mins)
     normalized_data = np.empty_like(unnormalized_data)
     for i in range(3):
         normalized_data[i] = 2 * (unnormalized_data[i] - mins[i])  / (maxs[i] - mins[i] + eps) - 1
+
+    if permute:
+        normalized_data = np.transpose(normalized_data, (1, 2, 0))
+    return normalized_data
+
+def normalize_mag_YCrCb(unnormalized_data : np.ndarray, stats : dict,  eps : float = 1e-8):
+    """
+    unnormalized_data (np.ndarray) : A 3xWxH image where the 3 rows are the RGB magnitude 
+    
+    stats (dict) : Statistics of the respective array, it should at least contain
+                   the max and min of the data array BEFORE normalization 
+
+                   The naming convetions for min and max for mag and phase are:
+                   mag_R_max, mag_G_max, mag_B_max
+                   mag_R_min, mag_G_MIN, mag_B_MIN
+                   phase_R_max, phase_G_max, phase_B_max
+                   phase_R_min, phase_G_MIN, phase_B_MIN
+                   
+
+    eps (float) : A small constant added during normalization to prevent overflow 
+
+    return : normalized data in the range [-1, 1]
+    """
+
+    # Formula: normalized_data = 2 * ((data - min) / (max - min + 1e-8)) - 1    
+    # -> data =  (normalized_data + 1) / 2 * (max - min + 1e-8) + min
+    normalized_data = 2 * (unnormalized_data - stats["mag_Y_min"])  / (stats["mag_Y_max"] - stats["mag_Y_min"] + eps) - 1
 
     return normalized_data
 
@@ -113,6 +142,31 @@ def unnormalize_mag(normalized_data : np.ndarray, stats : dict, eps : float = 1e
         nan_indices = np.where(np.isnan(unnormalized_data[i]))
         print(nan_indices)
         print("After", np.any(np.isnan(unnormalized_data[i])))
+    return unnormalized_data
+
+def unnormalize_mag_YCrCb(normalized_data : np.ndarray, stats : dict, eps : float = 1e-8):
+    """
+    normalized_data (np.ndarray) : A 3xWxH image where the 3 rows are the RGB magnitude 
+                                   These 3 rows should always be in the range [-1, 1]
+            
+    stats (dict) : Statistics of the respective array, it should at least contain
+                   the max and min of the data array BEFORE normalization 
+
+                   The naming convetions for min and max for mag and phase are:
+                   mag_R_max, mag_G_max, mag_B_max
+                   mag_R_min, mag_G_MIN, mag_B_MIN
+                   phase_R_max, phase_G_max, phase_B_max
+                   phase_R_min, phase_G_MIN, phase_B_MIN
+                   
+
+    eps (float) : A small constant added during normalization to prevent overflow 
+
+    return : unnormalized data in the original range (tips: it should be around [-18, 18] for log data)
+    """
+
+    # Formula: normalized_data = 2 * ((data - min) / (max - min + 1e-8)) - 1    
+    # -> data =  (normalized_data + 1) / 2 * (max - min + 1e-8) + min
+    unnormalized_data = ((normalized_data + 1) / 2) * (stats["mag_Y_max"] - stats["mag_Y_min"] + eps) + stats["mag_Y_min"]
     return unnormalized_data
 
 def unnormalize_mag_and_phase(normalized_data : np.ndarray, stats : dict, permute: bool = False, eps : float = 1e-8):

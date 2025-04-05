@@ -1,3 +1,5 @@
+# Training the model unconditionally 
+# Right now I am only training on the magnitude components
 import os
 import copy
 import numpy as np
@@ -6,7 +8,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch import optim
 from utils import *
-from modules import UNet_conditional, UNet_conditional_YCrCb, EMA
+from modules import UNet_Mag_Only, EMA
 import logging
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast
@@ -17,7 +19,7 @@ torch.cuda.empty_cache()
 torch.cuda.ipc_collect()
 # logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
-dir = "weights_YCrCb_ca"
+dir = "weights_uncond_mag_only"
 os.makedirs(dir, exist_ok=True)
 logging.basicConfig(
     filename=f'{dir}/training.log', 
@@ -149,13 +151,14 @@ class Diffusion:
 def train(args):
     setup_logging(args.run_name)
     device = args.device
-    dataloader = get_data_YCrCb(args)
-    model = UNet_conditional_YCrCb(args.image_size).to(device)
+    dataloader = get_data_YCrCb_mag_only(args)
+    model = UNet_Mag_Only(args.image_size).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.8, min_lr=1e-16)
+
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
     logger = SummaryWriter(os.path.join("runs", args.run_name))
-    # TODO: add pleteau learning rate scheduler 
 
     l = len(dataloader)
     ema = EMA(0.995)
@@ -182,17 +185,14 @@ def train(args):
             actual_epoch = epoch + args.epoch_start
             if args.load_state_dict:
                 actual_epoch += 1
-            logging.info(f"Starting epoch {actual_epoch}:")
+            logging.info(f"Starting epoch {actual_epoch} | Current LR: {optimizer.param_groups[0]['lr']}:")
             pbar = tqdm(dataloader)
-            for i, (diff_fft, rain_fft) in enumerate(pbar):
+            for i, (diff_fft, _) in enumerate(pbar):
                 diff_fft = diff_fft.to(device)
-                rain_fft = rain_fft.to(device)
                 t = diffusion.sample_timesteps(diff_fft.shape[0]).to(device)
                 x_t, noise = diffusion.noise_images(diff_fft, t)
-                if np.random.random() < 0.1:
-                    rain_fft = None
 
-                predicted_noise = model(x_t, t, rain_fft)
+                predicted_noise = model(x_t, t)
                 loss = mse(noise, predicted_noise)
                 optimizer.zero_grad()
                 loss.backward()
@@ -225,7 +225,7 @@ def train(args):
                 filename = f'{dir}/{actual_epoch}.pth'
                 torch.save(model.state_dict(), filename)
                 print("Saved {filename} at last epoch.")
-
+            scheduler.step(avg_train_loss)
 
     except Exception as e:
         print("Exception happened", e)
@@ -271,9 +271,9 @@ def launch():
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
-    args.load_state_dict = True
-    args.epoch_start = 9
-    args.lr = 5e-4
+    args.load_state_dict = False
+    args.epoch_start = 0
+    args.lr = 3e-4
     train(args)
 
 

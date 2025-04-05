@@ -1,3 +1,6 @@
+"""
+Training the diffusion model with the UNet_conditional_YCrCb_CA model
+"""
 import os
 import copy
 import numpy as np
@@ -6,7 +9,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch import optim
 from utils import *
-from modules import UNet_conditional, UNet_conditional_YCrCb, EMA
+from modules import UNet_conditional_YCrCb_CA, EMA
 import logging
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast
@@ -150,12 +153,13 @@ def train(args):
     setup_logging(args.run_name)
     device = args.device
     dataloader = get_data_YCrCb(args)
-    model = UNet_conditional_YCrCb(args.image_size).to(device)
+    model = UNet_conditional_YCrCb_CA(args.image_size).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
     logger = SummaryWriter(os.path.join("runs", args.run_name))
     # TODO: add pleteau learning rate scheduler 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.8, min_lr=1e-16)
 
     l = len(dataloader)
     ema = EMA(0.995)
@@ -225,7 +229,7 @@ def train(args):
                 filename = f'{dir}/{actual_epoch}.pth'
                 torch.save(model.state_dict(), filename)
                 print("Saved {filename} at last epoch.")
-
+            scheduler.step(avg_train_loss)
 
     except Exception as e:
         print("Exception happened", e)

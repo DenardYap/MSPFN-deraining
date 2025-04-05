@@ -13,7 +13,8 @@ class FFTDataset_YCrCb(Dataset):
                  diff_stats_csv_file="diff_fft_statistics_log_YCrCb.csv", 
                  rain_stats_csv_file="rain_fft_statistics_log_YCrCb.csv", 
                  resize_shape=32, 
-                 permute=True):
+                 permute=True,
+                 mag_only=False):
         """
         Data loader for FFT images
 
@@ -23,7 +24,9 @@ class FFTDataset_YCrCb(Dataset):
             rain_stats_csv_file (str): Path to the statistics of the rain FFT (e.g max, min, mean, std, etc)
             resize_shape (int) : The size to resize the image into -> e.g if 128 all images will be resized to 128x128
             permute (bool) : Whether to swap (W, H, C) to (C, W, H) 
+            mag_only (bool) : Whether to only return magnitude in training
         """
+        self.mag_only = mag_only
         self.resize_shape = resize_shape
         self.data = []
         # first read in the image path and its rain counterpart
@@ -65,7 +68,7 @@ class FFTDataset_YCrCb(Dataset):
         """Normalize data using min-max scaling."""
         normalized_data = np.zeros((self.resize_shape, self.resize_shape, 3), dtype=np.float32)
         
-        for i, key in enumerate(["mag_Y"]):
+        for i, key in enumerate(["mag_Y", "mag_Cr", "mag_Cb"]):
             min_val = float(stats[f"{key}_min"])  # Extract the min value
             max_val = float(stats[f"{key}_max"])  # Extract the max value
             
@@ -99,27 +102,43 @@ class FFTDataset_YCrCb(Dataset):
         image_path, image_rain_path = self.data[idx]
 
         # First get the unnormalized magnitude and phase for the groundtruth and rain images
+        # _, gt_phase, gt_mag_unnorm = generate_fft_YCRCB_training(image_path, resize_shape=self.resize_shape)
+        # _, rain_phase, rain_mag_unnorm = generate_fft_YCRCB_training(image_rain_path, resize_shape=self.resize_shape)
         _, gt_phase, gt_mag_unnorm = generate_fft_YCRCB(image_path, resize_shape=self.resize_shape)
         _, rain_phase, rain_mag_unnorm = generate_fft_YCRCB(image_rain_path, resize_shape=self.resize_shape)
 
-        # diff_phase = (gt_phase - rain_phase) 
+        # Normalize phase to be in within [-1, 1]
         diff_phase = (gt_phase - rain_phase) / (2 * np.pi)
         rain_phase /= np.pi
+
         # Step 1. Get the difference in the original scale 
         diff_mag_unnorm = gt_mag_unnorm - rain_mag_unnorm
-        # Step 2. Scale the log values down
+        # Step 2. Perform a log normalization 
         diff_mag_log = signed_log_scale(diff_mag_unnorm)
         # Step 3: Normalize to [-1, 1]
         diff_mag_norm = self._normalize(diff_mag_log, self.diff_stats)
 
+        # Do the same for rain 
         rain_mag_log = signed_log_scale(rain_mag_unnorm)
         rain_mag_norm = self._normalize(rain_mag_log, self.rain_stats)        
 
-        # Concat them to form a WxHx2 matrix
-        diff_mag_and_phase = np.concatenate([diff_mag_norm, diff_phase], axis=-1)  
-        rain_mag_and_phase = np.concatenate([rain_mag_norm, rain_phase], axis=-1)  
-        assert diff_mag_and_phase.shape[-1] == 2, f"Last dimension is not 2, it is {diff_mag_and_phase.shape[-1]}"
-        assert rain_mag_and_phase.shape[-1] == 2, f"Last dimension is not 2, it is {rain_mag_and_phase.shape[-1]}"
+        # Concat them to form a WxHx6 matrix
+        if self.mag_only:
+            diff_mag_and_phase = diff_mag_norm
+            rain_mag_and_phase = rain_mag_norm
+            # Only need the Y channel
+
+            diff_mag_and_phase = diff_mag_and_phase[:, :, [0]]  # make it into shape (W, H, 1)
+            rain_mag_and_phase = rain_mag_and_phase[:, :, [0]]  # make it into shape (W, H, 1)
+        else:
+            diff_mag_and_phase = np.concatenate([diff_mag_norm, diff_phase], axis=-1)  
+            rain_mag_and_phase = np.concatenate([rain_mag_norm, rain_phase], axis=-1)  
+            assert diff_mag_and_phase.shape[-1] == 6, f"Last dimension is not 6, it is {diff_mag_and_phase.shape[-1]}"
+            assert rain_mag_and_phase.shape[-1] == 6, f"Last dimension is not 6, it is {rain_mag_and_phase.shape[-1]}"
+
+            # Only need the Y channel
+            diff_mag_and_phase = diff_mag_and_phase[:, :, [0, 3]]  # make it into shape (W, H, 2)
+            rain_mag_and_phase = rain_mag_and_phase[:, :, [0, 3]]  # make it into shape (W, H, 2)
 
         if self.permute:
             # The UNet expect data to be in (2, W, H), but original data is (W, H, 2)
@@ -128,12 +147,12 @@ class FFTDataset_YCrCb(Dataset):
 
         diff_mag_and_phase = np.float32(diff_mag_and_phase)
         rain_mag_and_phase = np.float32(rain_mag_and_phase) 
-        print(diff_mag_and_phase.shape)
-        print(rain_mag_and_phase.shape)
-        print(np.max(diff_mag_and_phase, axis=(1, 2)))
-        print(np.min(diff_mag_and_phase, axis=(1, 2)))
-        print(np.max(rain_mag_and_phase, axis=(1, 2)))
-        print(np.min(rain_mag_and_phase, axis=(1, 2)))
+        # print(diff_mag_and_phase.shape)
+        # print(rain_mag_and_phase.shape)
+        # print(np.max(diff_mag_and_phase, axis=(1, 2)))
+        # print(np.min(diff_mag_and_phase, axis=(1, 2)))
+        # print(np.max(rain_mag_and_phase, axis=(1, 2)))
+        # print(np.min(rain_mag_and_phase, axis=(1, 2)))
         
         return diff_mag_and_phase, rain_mag_and_phase
 

@@ -3,33 +3,6 @@
 ## Enter interactive mode for GPU training
 salloc --job-name=interactive --cpus-per-task=4 --nodes=1 --mem=20G --time=08:00:00 --account=eecs556w25_class --partition=spgpu --gres=gpu:1
 
-Once you ran this command, you will have access to the Greatlakes' GPU. Then, in the same terminal, 
-run python ddpm_conditional.py to train the model. 
-
-# Training
-ddpm_conditional.py is responsible for training the model, `you might want to modify the parameters in launch()` before running the code. To run the code, first request for GPU (see above, the Greatlakes section), then run `python ddpm_conditional.py`. 
-
-# Dataloader
-To modify the dataloader, modify the get_data() function in utils.py. For now, we are using FFTDataset to get the data. 
-You can refer to the FFTDataset class to change how we access the data (e.g., change it to access real and imaginary parts instead of magnitude and phase).
-
-# Normalization 
-Since the FFT components are very large, we need to first log-normalize the data by using the signed_log_scale() function in helpers/process.py. Note: since FFT have negative values we need to do a signed log normalization instead of normal log normalizatio.
-
-Also, since machine learning model trains better in the [-1, 1] range, we also need to normalize the log-normalized data in the [-1, 1] range by using this formula 
-
-x_normalized = 2 * ((x_log - min_val) / (max_val - min_val + 1e-8)) - 1
-
-# Reverse normalization
-To reverse the normalization, you can reverse the formula above by doing 
-
-x_log = (x_normalized + 1)/2 * (max_val - min_val + 1e-8) + min_val
-
-Then, to reverse the log, call signed_log_inverse function in helpers/process.py.
-
-# Statistics
-To compute the statistics, refer to `get_fft_statistics_log.py` (for data after log transformation) or `get_fft_statistics.py` (for data before log transformation, you probably don't want to do this).
-
 ## Alternatively, use sbatch for better synchronization
 In the main directory, run `sbatch train.sh`
 
