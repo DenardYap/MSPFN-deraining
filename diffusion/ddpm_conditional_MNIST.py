@@ -8,7 +8,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch import optim
 from utils import *
-from modules import UNet_Mag_Only, EMA
+from modules import UNet_MNIST, EMA
 import logging
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast
@@ -16,7 +16,6 @@ import gc
 from torchvision import datasets, transforms
 
 transform = transforms.Compose([
-    transforms.Resize((32, 32)),    
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))  # Mean and std for MNIST
 ])
@@ -33,8 +32,8 @@ torch.cuda.empty_cache()
 torch.cuda.ipc_collect()
 # logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
-lr = 3e-4
-dir = f"all_weights/weights_uncond_mag_only_MNIST/{lr}"
+lr=5e-4
+dir = f"all_weights/weights_MNIST/{lr}"
 os.makedirs(dir, exist_ok=True)
 logging.basicConfig(
     filename=f'{dir}/training.log', 
@@ -68,14 +67,17 @@ class Diffusion:
     def sample_timesteps(self, n):
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
-    def sample(self, model, n):
+    def sample(self, model, n, labels, cfg_scale=3):
         logging.info(f"Sampling {n} new images....")
         model.eval()
         with torch.no_grad():
             x = torch.randn((n, 1, self.img_size, self.img_size)).to(self.device)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
                 t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t)
+                predicted_noise = model(x, t, labels)
+                if cfg_scale > 0:
+                    uncond_predicted_noise = model(x, t, None)
+                    predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
                 alpha = self.alpha[t][:, None, None, None]
                 alpha_hat = self.alpha_hat[t][:, None, None, None]
                 beta = self.beta[t][:, None, None, None]
@@ -88,11 +90,11 @@ class Diffusion:
         # x = (x.clamp(-1, 1) + 1) / 2
         # x = (x * 255).type(torch.uint8)
         return x
-
+    
 def train(args):
     setup_logging(args.run_name)
     device = args.device
-    model = UNet_Mag_Only(args.image_size).to(device)
+    model = UNet_MNIST().to(device)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.8, min_lr=1e-16)
 
@@ -103,6 +105,7 @@ def train(args):
     l = len(train_loader)
     ema = EMA(0.995)
     ema_model = copy.deepcopy(model).eval().requires_grad_(False)
+
 
     stats = {
         "best_train_epoch": -1,
@@ -127,19 +130,25 @@ def train(args):
                 actual_epoch += 1
             logging.info(f"Starting epoch {actual_epoch} | Current LR: {optimizer.param_groups[0]['lr']}:")
             pbar = tqdm(train_loader)
-            for i, (digit_image, _) in enumerate(pbar):
+            for i, (digit_image, labels) in enumerate(pbar):
                 digit_image = digit_image.to(device)
+                labels = labels.to(device)
                 t = diffusion.sample_timesteps(digit_image.shape[0]).to(device)
                 x_t, noise = diffusion.noise_images(digit_image, t)
-                predicted_noise = model(x_t, t)
+                if np.random.random() < 0.1:
+                    labels = None
+                predicted_noise = model(x_t, t, labels)
                 loss = mse(noise, predicted_noise)
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                ema.step_ema(ema_model, model)
+
 
                 pbar.set_postfix(MSE=loss.item())
                 logger.add_scalar("MSE", loss.item(), global_step=actual_epoch * l + i)
+                logger.add_scalar("Learning_Rate", optimizer.param_groups[0]['lr'], global_step=actual_epoch * l + i)
                 avg_train_loss += loss.item() * digit_image.shape[0]
                 num_train_items += digit_image.shape[0]
 
@@ -201,17 +210,14 @@ def launch():
     import argparse
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    args.run_name = "DDPM_conditional"
-    args.epochs = 70
+    args.run_name = "DDPM_unconditional_MNIST"
+    args.epochs = 100
     args.batch_size = 1
     args.image_size = 32
     args.num_classes = None
-    args.dataset_path = f'/home/bernerd/eecs556/data.csv'
-    args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
-    args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
-    args.load_state_dict = False
-    args.epoch_start = 0
+    args.load_state_dict = True
+    args.epoch_start = 19
     args.lr = lr
     train(args)
 

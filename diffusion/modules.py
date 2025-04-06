@@ -611,6 +611,132 @@ class UNet_conditional_YCrCb_CA(nn.Module):
         return output
 
 
+class UNet_MNIST(nn.Module):
+
+    def __init__(self, channels=[32, 64, 128, 256], embed_dim=256):
+        """
+        Initialize a time-dependent unet.
+
+        Args:
+        channels: The number of channels for feature maps of each resolution.
+        embed_dim: The dimensionality of Gaussian random feature embeddings.
+        """
+        super().__init__()
+        # Gaussian random feature embedding layer for time
+        self.embed = nn.Sequential(GaussianFourierProjection(embed_dim=embed_dim),
+            nn.Linear(embed_dim, embed_dim))
+        self.y_embed = nn.Embedding(10, embed_dim)
+        # B x 28 x 28 
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=channels[0], kernel_size=3)
+        self.gnorm1 = nn.GroupNorm(num_groups=4, num_channels=channels[0])
+        self.dense1 = Dense(embed_dim, channels[0])  
+
+        # B x 12 x 12 x 32 (?) 
+        self.conv2 = nn.Conv2d(in_channels=channels[0] , out_channels=channels[1], kernel_size=3, padding = 1, stride=2)
+        self.gnorm2 = nn.GroupNorm(num_groups=32, num_channels=channels[1])
+        self.dense2 = Dense(embed_dim, channels[1])  
+
+        self.conv3 = nn.Conv2d(in_channels=channels[1] , out_channels=channels[2], kernel_size=3, padding = 1, stride=2)
+        self.gnorm3 = nn.GroupNorm(num_groups=64, num_channels=channels[2])
+        self.dense3 = Dense(embed_dim, channels[2])  
+
+        self.conv4 = nn.Conv2d(in_channels=channels[2] , out_channels=channels[3], kernel_size=3, padding = 1, stride=2)
+        self.gnorm4 = nn.GroupNorm(num_groups=128, num_channels=channels[3])
+        self.dense4 = Dense(embed_dim, channels[3])  
+
+        self.attn3 = SelfAttention(channels[2]) 
+        self.attn4 = SelfAttention(channels[3]) 
+
+        self.tconv4 = nn.ConvTranspose2d(in_channels=channels[3], out_channels=channels[2], kernel_size=3, stride=2, padding=1)
+        self.tgnorm4 = nn.GroupNorm(num_groups=64, num_channels=channels[2])
+        self.tdense4 = Dense(embed_dim, channels[2])  
+
+        self.tconv3 = nn.ConvTranspose2d(in_channels=channels[2], out_channels=channels[1], kernel_size=3, stride=2, padding=1)
+        self.tgnorm3 = nn.GroupNorm(num_groups=32, num_channels=channels[1])
+        self.tdense3 = Dense(embed_dim, channels[1])  
+
+        self.tconv2 = nn.ConvTranspose2d(in_channels=channels[1], out_channels=channels[0], kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.tgnorm2 = nn.GroupNorm(num_groups=4, num_channels=channels[0])
+        self.tdense2 = Dense(embed_dim, channels[0])  
+
+        self.tconv1 = nn.ConvTranspose2d(in_channels=channels[0], out_channels=1, kernel_size=3)
+        # The swish activation function
+
+        self.act = nn.SiLU()
+    
+
+    def forward(self, x, t, cond=None):
+        """
+        Overall:
+
+        input -> downsample + add timeembedding + normalize + activation -> repeat 4 times
+        Also, add 2 self-attention block around the bottleneck 
+        -> Reverse is also the same except we upsample instead of downsample
+        """
+
+        x = self.conv1(x)
+        ori_t = self.embed(t)
+        if cond is not None:
+            comb_embed = self.y_embed(cond)
+            ori_t += comb_embed 
+
+        # NOTE: if doing this with Rain FFT image cross attention 
+        #       might be more helpful than just adding
+        time_embedding = self.dense1(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.gnorm1(x)
+        x = self.act(x)
+        x1 = x
+
+        x = self.conv2(x)
+        time_embedding = self.dense2(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.gnorm2(x)
+        x = self.act(x)
+        x2 = x
+
+        x = self.conv3(x)
+        x = self.attn3(x)
+        time_embedding = self.dense3(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.gnorm3(x)
+        x = self.act(x)
+        x3 = x
+
+        
+        x = self.conv4(x)
+        x = self.attn4(x)
+        time_embedding = self.dense4(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.gnorm4(x)
+        x = self.act(x)
+
+        # Upsampling 
+        x = self.tconv4(x) 
+
+        time_embedding = self.tdense4(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.tgnorm4(x)
+        x = self.act(x)
+        x = x + x3
+
+        x = self.tconv3(x) 
+        time_embedding = self.tdense3(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.tgnorm3(x)
+        x = self.act(x)
+        x = x + x2
+
+        x = self.tconv2(x) 
+        time_embedding = self.tdense2(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.tgnorm2(x)
+        x = self.act(x)
+        x = x + x1
+        x = self.tconv1(x)
+
+        return x
+    
 if __name__ == '__main__':
     # net = UNet(device="cpu")
     net = UNet_conditional(num_classes=10, device="cpu")
