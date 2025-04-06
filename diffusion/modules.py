@@ -2,8 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint
-
+import numpy as np
 
 # Useful debugging function to check if any value is NaN during training
 def check_nan(tensor, name):
@@ -229,6 +228,70 @@ class UNet(nn.Module):
         output = self.outc(x)
         return output
     
+class UNet_Mag_Only(nn.Module):
+    def __init__(self, image_size=64, c_in=1, c_out=1, time_dim=256, device="cuda"):
+        super().__init__()
+        self.device = device
+        self.time_dim = time_dim
+        self.image_size = image_size
+        self.inc = DoubleConv(c_in, 64)
+        self.down1 = Down(64, 128)
+        self.sa1 = SelfAttention(128, image_size//2)
+        self.down2 = Down(128, 196)
+        self.sa2 = SelfAttention(196, image_size//4)
+        self.down3 = Down(196, 196)
+        self.sa3 = SelfAttention(196, image_size//8)
+
+        self.bot1 = DoubleConv(196, 392)
+        self.bot2 = DoubleConv(392, 392)
+        self.bot3 = DoubleConv(392, 196)
+
+        # x = self.up2(x, x2, t)
+
+        self.up1 = Up(392, 128)
+        self.sa4 = SelfAttention(128, image_size//4)
+        self.up2 = Up(256, 64)
+        self.sa5 = SelfAttention(64, image_size//2)
+        self.up3 = Up(128, 64)
+        self.sa6 = SelfAttention(64, image_size)
+        self.outc = nn.Conv2d(64, c_out, kernel_size=1)
+
+    def pos_encoding(self, t, channels):
+        inv_freq = 1.0 / (
+            10000
+            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+        )
+        pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
+        pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
+        return pos_enc
+
+    def forward(self, x, t):
+        t = t.unsqueeze(-1).type(torch.float)
+        t = self.pos_encoding(t, self.time_dim)
+
+        x1 = self.inc(x)
+        x2 = self.down1(x1, t)
+        x2 = self.sa1(x2)
+        x3 = self.down2(x2, t)
+        x3 = self.sa2(x3)
+        x4 = self.down3(x3, t)
+        x4 = self.sa3(x4)
+
+        x4 = self.bot1(x4)
+        x4 = self.bot2(x4)
+        x4 = self.bot3(x4)
+
+        x = self.up1(x4, x3, t)
+        x = self.sa4(x)
+        x = self.up2(x, x2, t)
+        x = self.sa5(x)
+        x = self.up3(x, x1, t)
+        x = self.sa6(x)
+        output = self.outc(x)
+        return output
+
+
 class UNet_Mag_Only(nn.Module):
     def __init__(self, image_size=64, c_in=1, c_out=1, time_dim=256, device="cuda"):
         super().__init__()
@@ -611,6 +674,52 @@ class UNet_conditional_YCrCb_CA(nn.Module):
         return output
 
 
+class SelfAttention(nn.Module):
+    """
+    Self-Attention block that performs attention over the channels of the input tensor.
+    """
+    def __init__(self, in_dim):
+        super(SelfAttention, self).__init__()
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))  # Learnable scaling factor
+        self.softmax = nn.Softmax(dim=-1)  # Softmax over the spatial dimension
+    
+    def forward(self, x):
+        batch_size, C, height, width = x.size()  # Unpacking all four dimensions
+        query = self.query_conv(x).view(batch_size, -1, height * width)  # B x (C // 8) x (H * W)
+        key = self.key_conv(x).view(batch_size, -1, height * width)  # B x (C // 8) x (H * W)
+        value = self.value_conv(x).view(batch_size, -1, height * width)  # B x C x (H * W)
+        attention = torch.bmm(query.permute(0, 2, 1), key)  # B x (H * W) x (H * W)
+        attention = self.softmax(attention)  # B x (H * W) x (H * W)
+        out = torch.bmm(value, attention.permute(0, 2, 1))  # B x C x (H * W)
+        out = out.view(batch_size, C, height, width)  # Reshape back to (B, C, H, W)
+        out = self.gamma * out + x
+        return out
+    
+class GaussianFourierProjection(nn.Module):
+    """Gaussian random features for encoding time steps."""
+    def __init__(self, embed_dim, scale=30.):
+        super().__init__()
+        # Randomly sample weights during initialization. These weights are fixed
+        # during optimization and are not trainable.
+        self.W = nn.Parameter(torch.randn(embed_dim // 2) * scale, requires_grad=False)
+        
+    def forward(self, x):
+        x_proj = x[:, None] * self.W[None, :] * 2 * np.pi
+        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+
+
+class Dense(nn.Module):
+    """A fully connected layer that reshapes outputs to feature maps."""
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.dense = nn.Linear(input_dim, output_dim)
+    def forward(self, x):
+        return self.dense(x)[..., None]
+
+
 class UNet_MNIST(nn.Module):
 
     def __init__(self, channels=[32, 64, 128, 256], embed_dim=256):
@@ -737,6 +846,187 @@ class UNet_MNIST(nn.Module):
 
         return x
     
+class UNet2(nn.Module):
+
+    def __init__(self, channels=[32, 64, 128, 256], embed_dim=256):
+        """
+        Initialize a time-dependent unet that takes a 128x128 image and is conditioned on a second image.
+        
+        Args:
+            channels: The number of channels for feature maps at each resolution.
+            embed_dim: The dimensionality of Gaussian random feature embeddings.
+        """
+        super().__init__()
+        # Gaussian random feature embedding layer for time.
+        self.embed = nn.Sequential(
+            GaussianFourierProjection(embed_dim=embed_dim),
+            nn.Linear(embed_dim, embed_dim)
+        )
+        
+        # Remove the original label embedding (y_embed) because the condition is now an image.
+        # Build a separate condition encoder. It follows a similar architecture as the main encoder.
+        self.cond_conv1 = nn.Conv2d(in_channels=1, out_channels=channels[0], kernel_size=3, padding=1)
+        self.cond_gn1   = nn.GroupNorm(num_groups=4, num_channels=channels[0])
+        self.cond_conv2 = nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                                    kernel_size=3, stride=2, padding=1)
+        self.cond_gn2   = nn.GroupNorm(num_groups=32, num_channels=channels[1])
+        self.cond_conv3 = nn.Conv2d(in_channels=channels[1], out_channels=channels[2],
+                                    kernel_size=3, stride=2, padding=1)
+        self.cond_gn3   = nn.GroupNorm(num_groups=64, num_channels=channels[2])
+        self.cond_conv4 = nn.Conv2d(in_channels=channels[2], out_channels=channels[3],
+                                    kernel_size=3, stride=2, padding=1)
+        self.cond_gn4   = nn.GroupNorm(num_groups=128, num_channels=channels[3])
+        
+        # Main encoder layers.
+        # For 128x128 input, we add padding so that conv1 keeps spatial resolution.
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=channels[0],
+                               kernel_size=3, padding=1)  # 128x128 -> 128x128
+        self.gnorm1 = nn.GroupNorm(num_groups=4, num_channels=channels[0])
+        self.dense1 = Dense(embed_dim, channels[0])  
+
+        # Downsample to 64x64.
+        self.conv2 = nn.Conv2d(in_channels=channels[0], out_channels=channels[1],
+                               kernel_size=3, padding=1, stride=2)  # 128x128 -> 64x64
+        self.gnorm2 = nn.GroupNorm(num_groups=32, num_channels=channels[1])
+        self.dense2 = Dense(embed_dim, channels[1])  
+
+        # Downsample to 32x32.
+        self.conv3 = nn.Conv2d(in_channels=channels[1], out_channels=channels[2],
+                               kernel_size=3, padding=1, stride=2)
+        self.gnorm3 = nn.GroupNorm(num_groups=64, num_channels=channels[2])
+        self.dense3 = Dense(embed_dim, channels[2])
+        self.attn3 = SelfAttention(channels[2]) 
+
+        # Downsample to 16x16.
+        self.conv4 = nn.Conv2d(in_channels=channels[2], out_channels=channels[3],
+                               kernel_size=3, padding=1, stride=2)
+        self.gnorm4 = nn.GroupNorm(num_groups=128, num_channels=channels[3])
+        self.dense4 = Dense(embed_dim, channels[3])
+        self.attn4 = SelfAttention(channels[3]) 
+
+        # Upsampling blocks.
+        # Upsample from 16x16 to 32x32. Add output_padding=1 to match dimensions.
+        self.tconv4 = nn.ConvTranspose2d(in_channels=channels[3], out_channels=channels[2],
+                                         kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.tgnorm4 = nn.GroupNorm(num_groups=64, num_channels=channels[2])
+        self.tdense4 = Dense(embed_dim, channels[2])  
+
+        # Upsample from 32x32 to 64x64.
+        self.tconv3 = nn.ConvTranspose2d(in_channels=channels[2], out_channels=channels[1],
+                                         kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.tgnorm3 = nn.GroupNorm(num_groups=32, num_channels=channels[1])
+        self.tdense3 = Dense(embed_dim, channels[1])  
+
+        # Upsample from 64x64 to 128x128.
+        self.tconv2 = nn.ConvTranspose2d(in_channels=channels[1], out_channels=channels[0],
+                                         kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.tgnorm2 = nn.GroupNorm(num_groups=4, num_channels=channels[0])
+        self.tdense2 = Dense(embed_dim, channels[0])  
+
+        # Final upsampling: we use a transpose convolution that preserves the 128x128 resolution.
+        self.tconv1 = nn.ConvTranspose2d(in_channels=channels[0], out_channels=1,
+                                         kernel_size=3, padding=1)  # 128x128 -> 128x128
+        
+        self.act = nn.SiLU()
+        
+
+    def forward(self, x, t, cond=None):
+        """
+        Forward pass for the time-dependent UNet2.
+        
+        Args:
+            x: the primary input image (B x 1 x 128 x 128)
+            t: the time embedding input.
+            cond: an optional condition image (B x 1 x 128 x 128)
+        """
+        # Process condition if provided.
+        if cond is not None:
+            c1 = self.act(self.cond_gn1(self.cond_conv1(cond)))   # B x channels[0] x 128 x 128
+            c2 = self.act(self.cond_gn2(self.cond_conv2(c1)))         # B x channels[1] x 64 x 64
+            c3 = self.act(self.cond_gn3(self.cond_conv3(c2)))         # B x channels[2] x 32 x 32
+            c4 = self.act(self.cond_gn4(self.cond_conv4(c3)))         # B x channels[3] x 16 x 16
+
+        # Compute time embedding.
+        ori_t = self.embed(t)
+        
+        # -----------------------
+        # Downsampling path
+        # -----------------------
+        # Level 1
+        x = self.conv1(x)   # (B x 1 x 128 x 128) -> (B x channels[0] x 128 x 128)
+        time_embedding = self.dense1(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        if cond is not None:
+            x = x + c1
+        x = self.gnorm1(x)
+        x = self.act(x)
+        x1 = x
+
+        # Level 2
+        x = self.conv2(x)   # -> (B x channels[1] x 64 x 64)
+        time_embedding = self.dense2(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        if cond is not None:
+            x = x + c2
+        x = self.gnorm2(x)
+        x = self.act(x)
+        x2 = x
+
+        # Level 3
+        x = self.conv3(x)   # -> (B x channels[2] x 32 x 32)
+        x = self.attn3(x)
+        time_embedding = self.dense3(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        if cond is not None:
+            x = x + c3
+        x = self.gnorm3(x)
+        x = self.act(x)
+        x3 = x
+
+        # Level 4 (Bottleneck)
+        x = self.conv4(x)   # -> (B x channels[3] x 16 x 16)
+        x = self.attn4(x)
+        time_embedding = self.dense4(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        if cond is not None:
+            x = x + c4
+        x = self.gnorm4(x)
+        x = self.act(x)
+
+        # -----------------------
+        # Upsampling path
+        # -----------------------
+        # Upsample Level 4 -> Level 3
+        x = self.tconv4(x)  # -> (B x channels[2] x 32 x 32)
+        time_embedding = self.tdense4(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.tgnorm4(x)
+        x = self.act(x)
+        x = x + x3 # residual
+
+        # Upsample Level 3 -> Level 2
+        x = self.tconv3(x)  # -> (B x channels[1] x 64 x 64)
+        time_embedding = self.tdense3(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.tgnorm3(x)
+        x = self.act(x)
+        x = x + x2
+
+        # Upsample Level 2 -> Level 1
+        x = self.tconv2(x)  # -> (B x channels[0] x 128 x 128)
+        time_embedding = self.tdense2(ori_t).unsqueeze(-1)
+        x = x + time_embedding
+        x = self.tgnorm2(x)
+        x = self.act(x)
+        x = x + x1 
+
+        # Final reconstruction.
+        x = self.tconv1(x)  # -> (B x 1 x 128 x 128)
+
+        return x
+
+        
+
 if __name__ == '__main__':
     # net = UNet(device="cpu")
     net = UNet_conditional(num_classes=10, device="cpu")

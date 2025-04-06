@@ -146,7 +146,7 @@ def unnormalize_mag(normalized_data : np.ndarray, stats : dict, eps : float = 1e
 
 def unnormalize_mag_YCrCb(normalized_data : np.ndarray, stats : dict, eps : float = 1e-8):
     """
-    normalized_data (np.ndarray) : A 3xWxH image where the 3 rows are the RGB magnitude 
+    normalized_data (np.ndarray) : A 1xWxH image where the 3 rows are the RGB magnitude 
                                    These 3 rows should always be in the range [-1, 1]
             
     stats (dict) : Statistics of the respective array, it should at least contain

@@ -101,8 +101,6 @@ def train(args):
     logger = SummaryWriter(os.path.join("runs", args.run_name))
 
     l = len(train_loader)
-    ema = EMA(0.995)
-    ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
     stats = {
         "best_train_epoch": -1,
@@ -140,6 +138,7 @@ def train(args):
 
                 pbar.set_postfix(MSE=loss.item())
                 logger.add_scalar("MSE", loss.item(), global_step=actual_epoch * l + i)
+                logger.add_scalar("Learning_Rate", optimizer.param_groups[0]['lr'], global_step=actual_epoch * l + i)
                 avg_train_loss += loss.item() * digit_image.shape[0]
                 num_train_items += digit_image.shape[0]
 
@@ -201,14 +200,11 @@ def launch():
     import argparse
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    args.run_name = "DDPM_conditional"
-    args.epochs = 70
+    args.run_name = "DDPM_unconditional_MNIST"
+    args.epochs = 20
     args.batch_size = 1
     args.image_size = 32
     args.num_classes = None
-    args.dataset_path = f'/home/bernerd/eecs556/data.csv'
-    args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
-    args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
     args.load_state_dict = False
     args.epoch_start = 0

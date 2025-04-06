@@ -276,8 +276,8 @@ def launch():
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
-    args.load_state_dict = False
-    args.epoch_start = 0
+    args.load_state_dict = True
+    args.epoch_start = 7
     args.lr = 3e-4
     train(args)
 

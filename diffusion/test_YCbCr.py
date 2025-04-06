@@ -14,10 +14,9 @@ diff_mag_gt 0.767193347595782
 diff_mag_gt 0.7176361798597586
 but the predicted image range all the way from -1 to 1
 # investigate why we never see normalized of 1 
-
 """
-epoch = 37
-diff_npz = f"801_YCrCb_{epoch}.npz"
+epoch = 68
+diff_npz = f"801_UNet2_{epoch}.npz"
 stats = get_stats_YCrCb("statistics/diff_fft_statistics_log_YCrCb.csv")
 data = np.load(diff_npz)["data"]
 data = data[0, :, :] # get rid of batch

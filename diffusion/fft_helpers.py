@@ -3,6 +3,8 @@ import cv2
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
+from helpers.process import * 
+
 
 def generate_fft(img_path, resize_shape=None):
     
@@ -305,6 +307,40 @@ def reconstruct_from_rain_and_diff_mag_and_phase(groundtruth_image_path, rain_im
     plt.savefig(output_name)
 
 
+def reconstruct_prediction(rain_mag, diff_mag_unnorm):
+    # reconstruct rain_fft image from prediction 
+    print("dasdasda", np.max(rain_mag), np.max(signed_log_inverse(diff_mag_unnorm)))
+    return rain_mag + signed_log_inverse(diff_mag_unnorm)
+
+
+def reconstruct_from_fft_mag_only(mag):
+    fft_r = mag_r * np.exp(1j * phase_r)
+    fft_g = mag_g * np.exp(1j * phase_g)
+    fft_b = mag_b * np.exp(1j * phase_b)
+
+    # Perform inverse FFT for each channel
+    ifft_r = np.fft.ifft2(np.fft.ifftshift(fft_r))
+    ifft_g = np.fft.ifft2(np.fft.ifftshift(fft_g))
+    ifft_b = np.fft.ifft2(np.fft.ifftshift(fft_b))
+
+    # Get real values (discard imaginary part)
+    r_channel = np.abs(ifft_r)
+    g_channel = np.abs(ifft_g)
+    b_channel = np.abs(ifft_b)
+
+    # Normalize each channel to [0, 255]
+    r_channel = (r_channel / np.max(r_channel) * 255).astype(np.uint8)
+    g_channel = (g_channel / np.max(g_channel) * 255).astype(np.uint8)
+    b_channel = (b_channel / np.max(b_channel) * 255).astype(np.uint8)
+
+    # Merge the channels back into a color image
+    reconstructed_image = cv2.merge([b_channel, g_channel, r_channel])
+
+    # Save the reconstructed color image
+    cv2.imwrite(output_image, reconstructed_image)
+
+    print(f"Reconstructed color image saved as: {output_image}")
+
 def reconstruct_from_fft(mag_r, mag_g, mag_b, phase_r, phase_g, phase_b, output_image):
     fft_r = mag_r * np.exp(1j * phase_r)
     fft_g = mag_g * np.exp(1j * phase_g)
@@ -333,6 +369,7 @@ def reconstruct_from_fft(mag_r, mag_g, mag_b, phase_r, phase_g, phase_b, output_
 
     print(f"Reconstructed color image saved as: {output_image}")
 
+
 def reconstruct_from_fft_return(mag_r, mag_g, mag_b, phase_r, phase_g, phase_b):
     fft_r = mag_r * np.exp(1j * phase_r)
     fft_g = mag_g * np.exp(1j * phase_g)
@@ -357,6 +394,27 @@ def reconstruct_from_fft_return(mag_r, mag_g, mag_b, phase_r, phase_g, phase_b):
     reconstructed_image = cv2.merge([b_channel, g_channel, r_channel])
 
     return reconstructed_image
+
+def reconstruct_from_fft_YCrCb_return(mag_Y, mag_Cr, mag_Cb, phase_Y, phase_Cr, phase_Cb):
+    fft_Y_shifted = mag_Y * np.exp(1j * phase_Y)
+    fft_Cr_shifted = mag_Cr * np.exp(1j * phase_Cr)
+    fft_Cb_shifted = mag_Cb * np.exp(1j * phase_Cb)
+
+    fft_Y = np.fft.ifftshift(fft_Y_shifted)
+    fft_Cr = np.fft.ifftshift(fft_Cr_shifted)
+    fft_Cb = np.fft.ifftshift(fft_Cb_shifted)
+
+    Y = np.fft.ifft2(fft_Y).real
+    Cr = np.fft.ifft2(fft_Cr).real
+    Cb = np.fft.ifft2(fft_Cb).real
+
+    Y = np.clip(Y, 0, 255).astype(np.uint8)
+    Cr = np.clip(Cr, 0, 255).astype(np.uint8)
+    Cb = np.clip(Cb, 0, 255).astype(np.uint8)
+
+    img_YCrCb = cv2.merge([Y, Cr, Cb])
+    img_BGR = cv2.cvtColor(img_YCrCb, cv2.COLOR_YCrCb2BGR)
+    return img_BGR
 
 def reconstruct_from_fft_npz(input_npz, output_image):
     # Load FFT data for each channel

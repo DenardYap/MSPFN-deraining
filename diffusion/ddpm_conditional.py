@@ -6,7 +6,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch import optim
 from utils import *
-from modules import UNet_conditional, UNet_conditional_YCrCb, EMA
+from modules import UNet2, EMA
 import logging
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast
@@ -17,7 +17,7 @@ torch.cuda.empty_cache()
 torch.cuda.ipc_collect()
 # logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
-dir = "weights_YCrCb_ca"
+dir = "weights_mag_only"
 os.makedirs(dir, exist_ok=True)
 logging.basicConfig(
     filename=f'{dir}/training.log', 
@@ -150,12 +150,12 @@ def train(args):
     setup_logging(args.run_name)
     device = args.device
     dataloader = get_data_YCrCb(args)
-    model = UNet_conditional_YCrCb(args.image_size).to(device)
+    model = UNet2(args.image_size).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
     logger = SummaryWriter(os.path.join("runs", args.run_name))
-    # TODO: add pleteau learning rate scheduler 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.8, min_lr=1e-16)
 
     l = len(dataloader)
     ema = EMA(0.995)
@@ -206,6 +206,8 @@ def train(args):
 
             avg_train_loss /= num_train_items
             logging.info(f"MSE: {avg_train_loss}")
+            logging.info(f"LR: {optimizer.param_groups[0]['lr']}")
+
             stats["avg_train_loss"].append(float(avg_train_loss))
 
             if avg_train_loss < stats["best_train_loss"]:
@@ -225,7 +227,7 @@ def train(args):
                 filename = f'{dir}/{actual_epoch}.pth'
                 torch.save(model.state_dict(), filename)
                 print("Saved {filename} at last epoch.")
-
+            scheduler.step(avg_train_loss)
 
     except Exception as e:
         print("Exception happened", e)
@@ -262,7 +264,7 @@ def launch():
     import argparse
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
-    args.run_name = "DDPM_conditional"
+    args.run_name = "DDPM_conditional_UNet2"
     args.epochs = 70
     args.batch_size = 1
     args.image_size = 128
@@ -271,8 +273,8 @@ def launch():
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
-    args.load_state_dict = True
-    args.epoch_start = 9
+    args.load_state_dict = False
+    args.epoch_start = 0
     args.lr = 5e-4
     train(args)
 

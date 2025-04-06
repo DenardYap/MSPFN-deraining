@@ -19,7 +19,8 @@ torch.cuda.empty_cache()
 torch.cuda.ipc_collect()
 # logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
-dir = "weights_uncond_mag_only"
+lr = 3e-4
+dir = f"all_weights/weights_uncond_mag_only"
 os.makedirs(dir, exist_ok=True)
 logging.basicConfig(
     filename=f'{dir}/training.log', 
@@ -113,7 +114,7 @@ class Diffusion:
 
         return x
     
-    def sample_YCrCb(self, model, n, rain_ffts, cfg_scale=5):
+    def sample_YCrCb(self, model, n):
         """
         model : the diffusion model that was trained 
         n : the number of samples, basically the batch size
@@ -125,18 +126,12 @@ class Diffusion:
         logging.info(f"Sampling {n} new images....")
         model.eval()
         with torch.no_grad():
-            x = torch.randn((n, 2, self.img_size, self.img_size)).to(self.device)
+            x = torch.randn((n, 1, self.img_size, self.img_size)).to(self.device)
             for i in tqdm(reversed(range(1, self.noise_steps)), position=0):
                 t = (torch.ones(n) * i).long().to(self.device)
                 # predicted_noise = model(x, t, labels)
                 x = x.to(self.device)
-                rain_ffts = rain_ffts.to(self.device)
-                predicted_noise = model(x, t, rain_ffts)
-
-                if cfg_scale > 0:
-                    uncond_predicted_noise = model(x, t, None)
-                    assert not np.any(np.isnan(uncond_predicted_noise)), "uncond_predicted_noise contains NaN values"
-                    predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
+                predicted_noise = model(x, t)
                 alpha = self.alpha[t][:, None, None, None]
                 alpha_hat = self.alpha_hat[t][:, None, None, None]
                 beta = self.beta[t][:, None, None, None]
@@ -271,11 +266,10 @@ def launch():
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"
-    args.load_state_dict = False
-    args.epoch_start = 0
-    args.lr = 3e-4
+    args.load_state_dict = True
+    args.epoch_start = 43
+    args.lr = lr
     train(args)
-
 
 if __name__ == '__main__':
     launch()
