@@ -71,8 +71,8 @@ if __name__ == "__main__":
     image_id = "801"
     rain_image_path = f"dataset/images_rain/{image_id}_1.jpg"
     gt_image_path = f"dataset/images/{image_id}.jpg"
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = "cuda"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     img_size = 152
     print(f"Deraining {rain_image_path}, targeted image size: {img_size}")
     model = UNet_conditional(img_size).to(device)

@@ -13,8 +13,8 @@ from torch.cuda.amp import autocast
 import gc
 
 gc.collect()
-torch.cuda.empty_cache()
-torch.cuda.ipc_collect()
+#torch.cuda.empty_cache()
+#torch.cuda.ipc_collect()
 # logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
 logging.basicConfig(
@@ -25,7 +25,7 @@ logging.basicConfig(
 )
 
 class Diffusion:
-    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cuda"):
+    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cpu"):
         self.noise_steps = noise_steps
         self.beta_start = beta_start
         self.beta_end = beta_end
@@ -232,7 +232,7 @@ def launch():
     args.dataset_path = f'/home/bernerd/eecs556/data.csv'
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log.csv'
-    args.device = "cuda"
+    args.device = "cpu"
     args.load_state_dict = False
     args.epoch_start = 0
     args.lr = 3e-4

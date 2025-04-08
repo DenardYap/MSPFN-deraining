@@ -12,15 +12,17 @@ from fft_helpers import *
 
 data = [["groundtruth_id", "rain_id", "diff_npz_filepath", "groundtruth_npz_filepath", "rain_npz_filepath", "groundtruth_filepath", "rain_filepath"]]
 
-npz_save_folder = "/home/bernerd/eecs556/dataset"
-groundtruth_folder = "/home/bernerd/eecs556/dataset/images"
-rain_folder = "/home/bernerd/eecs556/dataset/images_rain"
+npz_save_folder = "/Users/gennadumont/Downloads/MSPFN-deraining/model/gennamodel"
+rain_folder = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop"
+clean_folder = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/cleancrop"
+groundtruth_folder = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/cleancrop"
+
 
 rain_image_paths = os.listdir(rain_folder)
 
 for i, rain_image_path in enumerate(rain_image_paths):
     rain_id, ext = rain_image_path.split('.')
-    groundtruth_id, _ = rain_id.split('_')
+    groundtruth_id = rain_id.split('.')[0]
     rain_filepath = os.path.join(rain_folder, rain_image_path)
     groundtruth_filepath = os.path.join(groundtruth_folder, groundtruth_id + "." + ext)
     groundtruth_mag, groundtruth_phase, rain_mag, rain_phase = \
