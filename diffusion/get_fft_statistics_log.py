@@ -4,7 +4,7 @@ mean, std, max, and min of each of the following channels
 
 Mag_R Mag_G Mag_B Phase_R Phase_G Phase_B
 """
-
+"""
 from fft_helpers import * 
 import os 
 import sys 
@@ -14,7 +14,7 @@ from helpers.process import *
 
 groundtruth_folder = "dataset/images"
 rain_folder = "dataset/images_rain"
-rain_image_paths = os.listdir(rain_folder)
+#rain_image_paths = os.listdir(rain_folder)
 
 # for rains
 rain_mins = np.array([float('inf'), float('inf'), float('inf'), float('inf'), float('inf'), float('inf')])  
@@ -131,3 +131,56 @@ with open(output_csv_diff, mode='w', newline='') as f:
     csv_writer.writerows(diff_data)
 
 print(f"Wrote csv files to {output_csv_diff} and {output_csv_rain}")
+"""
+
+import os
+import numpy as np
+import argparse
+import csv
+
+def signed_log(x):
+    return np.sign(x) * np.log1p(np.abs(x))
+
+def get_mag_and_phase_stats(npz_dir):
+    mag_vals = []
+    phase_vals = []
+
+    for file in os.listdir(npz_dir):
+        if file.endswith('.npz'):
+            data = np.load(os.path.join(npz_dir, file))['mag_and_phase']
+            mag = data[:, :, :3]
+            phase = data[:, :, 3:]
+
+            mag_vals.append(mag)
+            phase_vals.append(phase)
+
+    mag_all = np.concatenate([x.flatten() for x in mag_vals])
+    phase_all = np.concatenate([x.flatten() for x in phase_vals])
+
+    stats = {
+        'mag_min': np.min(mag_all),
+        'mag_max': np.max(mag_all),
+        'mag_mean': np.mean(mag_all),
+        'mag_std': np.std(mag_all),
+        'phase_min': np.min(phase_all),
+        'phase_max': np.max(phase_all),
+        'phase_mean': np.mean(phase_all),
+        'phase_std': np.std(phase_all)
+    }
+
+    return stats
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str, required=True)
+    parser.add_argument('--output_csv', type=str, required=True)
+    args = parser.parse_args()
+
+    stats = get_mag_and_phase_stats(args.data_dir)
+
+    with open(args.output_csv, 'w') as f:
+        writer = csv.writer(f)
+        for k, v in stats.items():
+            writer.writerow([k, v])
+
+    print("Stats written to", args.output_csv)

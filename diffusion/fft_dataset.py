@@ -31,8 +31,9 @@ class FFTDataset(Dataset):
             reader = csv.reader(file)
             next(reader)  # Skip the header row
             for row in reader:
-                image_path, image_rain_path = row
-                self.data.append((image_path, image_rain_path))  # Store as a tuple
+                _, _, diff_path, _, rain_path, _, _ = row
+                self.data.append((diff_path, rain_path))
+  # Store as a tuple
         
         # Then we grab the statistics for normalization purposes
         column_names = [
