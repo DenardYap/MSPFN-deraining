@@ -51,22 +51,37 @@ from skimage.metrics import peak_signal_noise_ratio as psnr, structural_similari
 from PIL import Image
 import numpy as np
 
-def calculate_fsim(image_path1, image_path2):
+def calculate_fsim(pred, gt, resize_shape=None):
     """Calculates the FSIM (Feature Similarity Index) between two images."""
-    img1 = np.array(Image.open(image_path1).convert('RGB'))
-    img2 = np.array(Image.open(image_path2).convert('RGB'))
+    gt_img = Image.open(gt)
+    pred_img = Image.open(pred)
+    if resize_shape:
+        gt_img = gt_img.resize((resize_shape, resize_shape))
+        pred_img = pred_img.resize((resize_shape, resize_shape))
+    img1 = np.array(pred_img.convert('RGB'))
+    img2 = np.array(gt_img.convert('RGB'))
     return fsim(img1, img2)
 
-def calculate_psnr(image_path1, image_path2):
+def calculate_psnr(pred, gt, resize_shape=None):
     """Calculates the PSNR (Peak Signal-to-Noise Ratio) between two grayscale images."""
-    img1 = np.array(Image.open(image_path1).convert('L'))  # Convert to grayscale
-    img2 = np.array(Image.open(image_path2).convert('L'))
+    gt_img = Image.open(gt)
+    pred_img = Image.open(pred)
+    if resize_shape:
+        gt_img = gt_img.resize((resize_shape, resize_shape))
+        pred_img = pred_img.resize((resize_shape, resize_shape))
+    img1 = np.array(pred_img.convert('L'))  # Convert to grayscale
+    img2 = np.array(gt_img.convert('L'))
     return psnr(img1, img2)
 
-def calculate_ssim(image_path1, image_path2):
+def calculate_ssim(pred, gt, resize_shape=None):
     """Calculates the SSIM (Structural Similarity Index) between two grayscale images."""
-    img1 = np.array(Image.open(image_path1).convert('L'))  # Convert to grayscale
-    img2 = np.array(Image.open(image_path2).convert('L'))
+    gt_img = Image.open(gt)
+    pred_img = Image.open(pred)
+    if resize_shape:
+        gt_img = gt_img.resize((resize_shape, resize_shape))
+        pred_img = pred_img.resize((resize_shape, resize_shape))
+    img1 = np.array(pred_img.convert('L'))  # Convert to grayscale
+    img2 = np.array(gt_img.convert('L'))
     return ssim(img1, img2)
 
 if __name__ == "__main__":

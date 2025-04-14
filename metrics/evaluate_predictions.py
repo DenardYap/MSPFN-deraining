@@ -15,7 +15,7 @@ import time
 from metric import * 
 
 # dataset_names = ["bilateral_filter", "bilateral_filter_implementation2", "direction_filtered_images", "edge_enhanced", "gaussian_filter", "median_filter", "median_filter_implementation2", "nlm_implementation2"]
-dataset_names = ["wiener_filter"]
+dataset_names = ["R100H"]
 for dataset_name in dataset_names:
     predict_folder = f"/Users/bernardyap/Desktop/UofM/WN25/EECS 556/Deraining/model/test/test_data/{dataset_name}_predict"
     groundtruth_folder = f"/Users/bernardyap/Desktop/UofM/WN25/EECS 556/Deraining/model/test/test_data/R100H/cleancrop"
@@ -32,9 +32,9 @@ for dataset_name in dataset_names:
         # print(image_name)
         predict_path = os.path.join(predict_folder, image_name)
         groundtruth_path = os.path.join(groundtruth_folder, image_name)
-        SSIM += calculate_ssim(predict_path, groundtruth_path)
-        FSIM += calculate_fsim(predict_path, groundtruth_path)
-        PSNR += calculate_psnr(predict_path, groundtruth_path)
+        SSIM += calculate_ssim(predict_path, groundtruth_path, 128)
+        FSIM += calculate_fsim(predict_path, groundtruth_path, 128)
+        PSNR += calculate_psnr(predict_path, groundtruth_path, 128)
 
     end_time = time.time()
     print(f"Took {end_time - start_time}s for dataset {dataset_name}")
