@@ -11,6 +11,10 @@ import logging
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast
 import gc
+import matplotlib.pyplot as plt 
+from utils import get_data_YCrCb
+from utils import setup_logging  # If this is where it’s defined
+
 
 gc.collect()
 torch.cuda.empty_cache()
@@ -263,13 +267,14 @@ def train(args):
 def launch():
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument('--data_csv', type=str, default=None, help='Path to your data CSV file')
     args = parser.parse_args()
     args.run_name = "DDPM_conditional_UNet2"
     args.epochs = 70
     args.batch_size = 1
     args.image_size = 128
     args.num_classes = None
-    args.dataset_path = f'/home/bernerd/eecs556/data.csv'
+    args.dataset_path = args.data_csv
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"

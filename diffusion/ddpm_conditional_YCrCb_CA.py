@@ -14,6 +14,8 @@ import logging
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast
 import gc
+import matplotlib.pyplot as plt 
+
 
 gc.collect()
 torch.cuda.empty_cache()
@@ -271,7 +273,7 @@ def launch():
     args.batch_size = 1
     args.image_size = 128
     args.num_classes = None
-    args.dataset_path = f'/home/bernerd/eecs556/data.csv'
+    args.dataset_path = args.data_csv
     args.diff_stats_csv_file = f'statistics/diff_fft_statistics_log_YCrCb.csv'
     args.rain_stats_csv_file = f'statistics/rain_fft_statistics_log_YCrCb.csv'
     args.device = "cuda"

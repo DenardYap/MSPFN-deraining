@@ -12,9 +12,9 @@ from fft_helpers import *
 
 data = [["groundtruth_id", "rain_id", "diff_npz_filepath", "groundtruth_npz_filepath", "rain_npz_filepath", "groundtruth_filepath", "rain_filepath"]]
 
-npz_save_folder = "/home/bernerd/eecs556/dataset"
-groundtruth_folder = "/home/bernerd/eecs556/dataset/images"
-rain_folder = "/home/bernerd/eecs556/dataset/images_rain"
+npz_save_folder = "/home/gennadumont/Downloads/MSPFN-deraining/dataset"
+groundtruth_folder = "/home/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop"
+rain_folder = "/home/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/cleancrop"
 
 rain_image_paths = os.listdir(rain_folder)
 

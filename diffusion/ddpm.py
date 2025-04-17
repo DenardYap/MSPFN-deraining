@@ -8,6 +8,8 @@ from utils import *
 from modules import UNet
 import logging
 from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt 
+
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
 
@@ -101,7 +103,7 @@ def launch():
     args.epochs = 500
     args.batch_size = 12
     args.image_size = 256
-    args.dataset_path = f'/home/bernerd/eecs556/data.csv'
+    args.dataset_path = args.data_csv
     args.device = "cuda"
     args.lr = 3e-4
     train(args)

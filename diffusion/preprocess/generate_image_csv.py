@@ -8,8 +8,8 @@ import os
 
 data = [["image_filepath", "image_rain_filepath"]]
 
-groundtruth_folder = "/home/bernerd/eecs556/dataset/images"
-rain_folder = "/home/bernerd/eecs556/dataset/images_rain"
+groundtruth_folder = "/home/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop"
+rain_folder = "/home/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/cleancrop"
 rain_image_paths = os.listdir(rain_folder)
 
 for i, rain_image_path in enumerate(rain_image_paths):
