@@ -5,6 +5,8 @@ import cv2
 import matplotlib.pyplot as plt
 from scipy.signal import wiener
 
+image_path = "/Users/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/cleancrop/1.png"
+
 def get_filter(rows, cols, D0=30):
     crow, ccol = rows // 2, cols // 2  # Center of the frequency domain
 
@@ -27,6 +29,7 @@ def ideal_highpass_filter(shape, cutoff):
     mask[d < cutoff] = 0  # Zero out low frequencies
     return mask
 
+#image = cv2.imread("giraffe_rain.png", cv2.IMREAD_GRAYSCALE)
 def apply_wiener_color(img, kernel_size=(10, 10)):
     filtered_channels = []
     for i in range(3):  # loop over R, G, B
@@ -35,9 +38,8 @@ def apply_wiener_color(img, kernel_size=(10, 10)):
         filtered_channels.append(filtered_channel)
     return cv2.merge(filtered_channels)
 
-img = cv2.imread("/Users/gennadumont/Downloads/MSPFN-deraining/diffusion/giraffe_rain.png")
-
-filtered_image = apply_wiener_color(img, (10, 10))
+#img = cv2.imread("/home/gennadumont/Downloads/MSPFN-deraining/model/test/test_data/R100H/inputcrop/1.png")
+#filtered_image = apply_wiener_color(img, (10, 10))
 
 """
 # Display results

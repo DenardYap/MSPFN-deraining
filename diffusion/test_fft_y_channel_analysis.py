@@ -21,69 +21,6 @@ diff_phase = phase_gt - phase_rain
 norm_diff_mag = normalize_diff(diff_mag)
 norm_diff_phase = normalize_diff(diff_phase)
 
-# === Helper: Show a row of subplots ===
-"""
-def show_fft_row(mag_gt, phase_gt, mag_rain, phase_rain, diff_mag, diff_phase, label):
-    plt.subplot(3, 6, label * 6 + 1)
-    plt.imshow(mag_gt, cmap='gray')
-    plt.title(f"GT Mag {label}")
-    plt.axis('off')
-
-    plt.subplot(3, 6, label * 6 + 2)
-    plt.imshow(phase_gt, cmap='gray')
-    plt.title(f"GT Phase {label}")
-    plt.axis('off')
-
-    plt.subplot(3, 6, label * 6 + 3)
-    plt.imshow(mag_rain, cmap='gray')
-    plt.title(f"Rain Mag {label}")
-    plt.axis('off')
-
-    plt.subplot(3, 6, label * 6 + 4)
-    plt.imshow(phase_rain, cmap='gray')
-    plt.title(f"Rain Phase {label}")
-    plt.axis('off')
-
-    plt.subplot(3, 6, label * 6 + 5)
-    plt.imshow(diff_mag, cmap='gray')
-    plt.title(f"Diff Mag {label}")
-    plt.axis('off')
-
-    plt.subplot(3, 6, label * 6 + 6)
-    plt.imshow(diff_phase, cmap='gray')
-    plt.title(f"Diff Phase {label}")
-    plt.axis('off')
-
-# === Plot All Channels ===
-#plt.figure(figsize=(18, 9))
-
-show_fft_row(
-    mag_gt[:, :, 0], phase_gt[:, :, 0],
-    mag_rain[:, :, 0], phase_rain[:, :, 0],
-    norm_diff_mag[:, :, 0], norm_diff_phase[:, :, 0],
-    label=0
-)
-
-show_fft_row(
-    mag_gt[:, :, 1], phase_gt[:, :, 1],
-    mag_rain[:, :, 1], phase_rain[:, :, 1],
-    norm_diff_mag[:, :, 1], norm_diff_phase[:, :, 1],
-    label=1
-)
-
-show_fft_row(
-    mag_gt[:, :, 2], phase_gt[:, :, 2],
-    mag_rain[:, :, 2], phase_rain[:, :, 2],
-    norm_diff_mag[:, :, 2], norm_diff_phase[:, :, 2],
-    label=2
-)
-
-plt.suptitle("YCrCb FFT Comparison: GT vs Rain vs Diff", fontsize=16)
-plt.tight_layout()
-plt.savefig("fft_ycrcb_analysis.png")
-plt.show()
-"""
-
 # === Reconstruct using Y-channel diff only ===
 def reconstruct_Y_only(groundtruth_path, rain_path):
     gt_img = cv2.imread(groundtruth_path)
@@ -131,7 +68,7 @@ def reconstruct_Y_only(groundtruth_path, rain_path):
     plt.tight_layout()
     plt.show()
 
-    cv2.imwrite("reconstructed_Y_only.png", new_bgr)
+    cv2.imwrite("best_output.png", new_bgr)
     print("Saved: reconstructed_Y_only.png")
 
 
